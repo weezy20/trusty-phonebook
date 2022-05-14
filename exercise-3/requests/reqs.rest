@@ -1,0 +1,44 @@
+DELETE http://localhost:3001/api/persons/2
+
+### Get all persons
+
+GET http://localhost:3001/api/persons
+
+### Good request
+POST http://localhost:3001/api/persons HTTP/1.1
+Content-Type: application/json
+
+{   
+    "name": "Abhishek Shah",
+    "number": "91-aaaa"
+}
+
+### Name missing
+POST http://localhost:3001/api/persons HTTP/1.1
+Content-Type: application/json
+
+{   
+    "number": "91-136956"
+}
+
+### Number missing
+POST http://localhost:3001/api/persons HTTP/1.1
+Content-Type: application/json
+
+{   
+    "name": "Abhishek Shah"
+}
+
+### both missing
+POST http://localhost:3001/api/persons HTTP/1.1
+Content-Type: application/json
+
+{   
+"peanuts" : true
+}
+### both missing without peanuts
+POST http://localhost:3001/api/persons HTTP/1.1
+Content-Type: application/json
+
+{   
+}
