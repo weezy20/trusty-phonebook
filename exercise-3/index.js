@@ -68,20 +68,21 @@ app.post("/api/persons", (req, res) => {
     : !personInfo.number
     ? "Number missing"
     : "None";
-  if (missingError !== "None") return res.status(400).json({ error: missingError });
+  if (missingError !== "None")
+    return res.status(400).json({ error: missingError });
   // step 6 : since we already did step 6 first half here, we will do the remaining
   // ie a pre-existing name entry should be rejected
   if (checkNameAlreadyExists(personInfo.name))
     return res
       .status(400)
       .json({ error: "Name must be unique! (I know this is stupid but)" });
-      
+
   console.log(personInfo);
   const personId = generatePersonId();
   personInfo.id = personId;
   phonebook = phonebook.concat(personInfo);
   res.statusMessage = "Person entry created";
-  res.status(201).end();
+  res.status(204).end();
 });
 
 app.listen(PORT, () => console.log("Server running at localhost:" + PORT));
@@ -103,3 +104,15 @@ const genRandomInt = (max) => 1 + Math.floor(max * Math.random());
 function checkNameAlreadyExists(name) {
   return phonebook.find((p) => p.name == name);
 }
+/*
+https://stackoverflow.com/questions/1226810/is-http-post-request-allowed-to-send-back-a-response-body
+The action performed by the POST method might not result in a resource that can be
+ identified by a URI. In this case, either 200 (OK) or 204 (No Content) is the appropriate 
+ response status, depending on whether or not the response includes an entity that 
+ describes the result.
+
+If a resource has been created on the origin server,
+ the response SHOULD be 201 (Created) and contain an entity which describes the 
+ status of the request and refers to the new resource, and a Location header 
+ (see section 14.30).
+*/
