@@ -77,17 +77,20 @@ app.post("/notes", (rq, rs) => {
   const newId =
     notes.length > 0 ? 1 + Math.max(...notes.map((note) => note.id)) : 0;
   if (!body.content) {
+    // 400 Bad request
     return rs.status(400).json({ error: "Content missing" });
   }
   const note = {
     content: body.content,
     important: body.important || false,
-    date: body.date || new Date(),
+    date: new Date(), // Don't rely on the client to supply a date
     id: newId,
   };
 
   console.log("Adding note ->\n ", note);
-  notes.push(note);
+  // notes.push(note); 
+  // or
+  notes = notes.concat(note);
   rs.json(note);
 });
 
