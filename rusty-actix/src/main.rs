@@ -3,14 +3,14 @@
 //! And a file reader writer that can read and manipulate a json file
 //! We take the dynamic json reader approach first i.e. no struct defining a schema, just Json JsonValue
 
-use actix_web::web::Json;
-// use serde::{Deserialize, Serialize};
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::io;
 // use io::BufReader;
 // use io::Result;
 // use io::Read;
+use std::fmt::Display;
 use std::fs::File;
 use std::path::Path;
 #[derive(Debug, thiserror::Error)]
@@ -21,6 +21,24 @@ enum Err {
     Json(#[from] serde_json::error::Error),
     #[error("JSON Array Parse Error")]
     JsonArrayParseError,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Person {
+    id: u128,
+    name: String,
+    number: String,
+}
+impl Display for Person {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Person { name, id, number } = self;
+        write!(f, "{{ name: {name} id: {id} number: {number} }})")
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonFile {
+    phonebook: Vec<Person>,
 }
 
 fn main() -> Result<()> {
@@ -46,10 +64,10 @@ fn main() -> Result<()> {
             .with_context(|| "IO error at mmap")?
     };
 
-    let mut json_file = serde_json::from_slice::<JsonValue>(&bytes)
+    let mut json_file = serde_json::from_slice::<JsonFile>(&bytes)
         .map_err(|err| Err::Json(err))
-        .with_context(|| "json parse error <X>")?;
-    let ref mut phonebook = json_file["phonebook"];
+        .with_context(|| "json file parse error")?;
+    let mut phonebook = json_file.phonebook;
 
     // TODO : write procedures to manipulate the phonebook
     // For starters we want to create entries, delete entries, generate IDs using a random function
@@ -58,45 +76,33 @@ fn main() -> Result<()> {
     // "Names should be unique"
 
     // Let's change one entry first
-    print(phonebook);
-    mutate(phonebook)?;
+    print_phonebook(&phonebook);
+    mutate(&mut phonebook)?;
     println!("\nAfter Mutation\n");
-    print(phonebook);
+    print_phonebook(&phonebook);
 
     Ok(())
 }
 
-fn mutate(p: &mut JsonValue) -> Result<()> {
-    let entries = p
-        .as_array_mut()
-        .ok_or(Err::JsonArrayParseError)
-        .with_context(|| format!("Cannot obtain a mutable array from json JsonValue"))?;
-    // Cannot attach phonebook debug in this context since it is already mutably borrowed
-    for entry in entries.iter_mut() {
-        // It's possible to index a JsonValue by &str because of :
-        // https://docs.serde.rs/serde_json/value/trait.Index.html#foreign-impls
-        // println!("{}", entry["name"]);
-        // Let's mutate id 1 , name from Arto Hellas to Cassandra Fox
-        let arto = entry["name"]
-            .as_str()
-            .ok_or(Err::JsonArrayParseError)
-            .with_context(|| format!("Name must be String"))?;
-        if arto.to_ascii_lowercase().starts_with("arto")
-            && arto.to_ascii_lowercase().ends_with("hellas")
+fn mutate(p: &mut Vec<Person>) -> Result<()> {
+    for person in p.iter_mut() {
+        let p_name = &person.name;
+        if p_name.to_ascii_lowercase().starts_with("arto")
+            && p_name.to_ascii_lowercase().ends_with("hellas")
         {
-            let _ = std::mem::replace(
-                &mut entry["name"],
-                JsonValue::String("Cassandra Fox".into()),
-            );
+            // *person.name is wrong syntax because `.` has higher precedence than `*`
+            // (*person).name = String::from("Cassandra Fox");
+            let arto = std::mem::replace(&mut person.name, String::from("Cassandra Fox"));
+            println!("Arto Hellas found and Deleted! ^_^");
         }
     }
 
     Ok(())
 }
 
-fn print(p: &JsonValue) {
-    let entries = p.as_array().expect("Infallible");
-    for entry in entries.iter() {
-        println!("{entry}");
+fn print_phonebook(p: &Vec<Person>) {
+    let entries = p.iter();
+    for person in entries {
+        println!("{person}");
     }
 }
