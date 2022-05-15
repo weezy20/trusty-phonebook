@@ -3,6 +3,7 @@
 //! And a file reader writer that can read and manipulate a json file
 
 // use serde::{Deserialize, Serialize};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::io;
 // use io::BufReader;
@@ -14,19 +15,19 @@ use std::path::Path;
 enum Err {
     #[error("IO ERROR HAPPENED!")]
     Io(#[from] io::Error),
-    #[error("Json error")]
+    #[error("JSON ERROR")]
     Json(#[from] serde_json::error::Error),
 }
 
-// TODO : Bring io and serde_json errors under a single error type
-fn main() -> Result<(), Err> {
+fn main() -> Result<()> {
     // let path = Path::new("../phonebook.json");
     let path = Path::new("mock.json");
     let rdr = File::options()
         .write(true)
         .read(true)
         .open(path)
-        .map_err(|err| Err::Io(err))?;
+        .map_err(|err| Err::Io(err))
+        .with_context(|| format!("Failed to read `{}`", path.display()))?;
     // The content of the IO stream is deserialized directly from the stream without being buffered in memory by serde_json.
     // let phonebook = serde_json::from_reader::<File, Value>(rdr)?;
     // https://github.com/serde-rs/json/issues/160
@@ -35,10 +36,15 @@ fn main() -> Result<(), Err> {
     // let phonebook = serde_json::from_reader::<BufReader<File>, Value>(buf_rdr)?;
     // Apparently reading the entire file into memory is the fastest way to deserialize i.e. `from_slice` and `from_str` methods
     // are faster than the `from_reader` method
-    let bytes = unsafe { memmap2::Mmap::map(&rdr).map_err(|err| Err::Io(err))? };
+    let bytes = unsafe {
+        memmap2::Mmap::map(&rdr)
+            .map_err(|err| Err::Io(err))
+            .with_context(|| "IO error at mmap")?
+    };
 
-    let json_file =
-        serde_json::from_slice::<Value>(&bytes).map_err(|err| Err::Json(err))?;
+    let json_file = serde_json::from_slice::<Value>(&bytes)
+        .map_err(|err| Err::Json(err))
+        .with_context(|| "json parse error <X>")?;
     #[allow(unused_mut)]
     let mut phonebook = &json_file["phonebook"];
 
