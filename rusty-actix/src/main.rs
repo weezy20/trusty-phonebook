@@ -50,5 +50,11 @@ fn main() -> Result<()> {
 
     println!("{:?}", phonebook[1]);
 
+    // TODO : write procedures to manipulate the phonebook
+    // For starters we want to create entries, delete entries, generate IDs using a random function
+    // Then we can trouble ourselves with updating a pre-existing entry
+    // also we must ensure that if a "name" already exists, it shouldn't be added with an appropriate error msg
+    // "Names should be unique"
+
     Ok(())
 }
