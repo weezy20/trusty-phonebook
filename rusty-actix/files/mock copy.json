@@ -2,8 +2,8 @@
   "phonebook": [
     {
       "id": 1,
-      "name": "Cassandra Fox",
-      "number": "099-887766"
+      "name": "Arto Hellas",
+      "number": "040-123456"
     },
     {
       "id": 2,
@@ -16,14 +16,9 @@
       "number": "12-43-234345"
     },
     {
-      "id": 6,
-      "name": "Harry Potter",
-      "number": "4413"
-    },
-    {
-      "id": 7,
-      "name": "Abhishek R Shah",
-      "number": "999-123"
+      "id": 4,
+      "name": "Mary Poppendieck",
+      "number": "39-23-6423122"
     }
   ]
 }

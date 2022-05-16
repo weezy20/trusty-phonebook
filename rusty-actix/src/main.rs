@@ -60,6 +60,7 @@ fn main() -> Result<()> {
     // "Names should be unique"
 
     // TODO : Write a convenient decl macro for add_to_phonebook which removes the need for ..Default::default()
+    println!("Before any operation:\n");
     json_file.print_phonebook();
     json_file.add_to_phonebook(
         Person {
@@ -83,8 +84,13 @@ fn main() -> Result<()> {
             ..Default::default()
         }
     )?;
+    json_file.update(
+        1, Person {  name: "Cassandra Fox".into(), number: "099-887766".into(), ..Default::default() }
+    )?;
+    json_file.delete(4)?;
     log::debug!("\nAfter Mutation:\n");
     json_file.print_phonebook();
+    println!("Writing JSON to {}", path.display());
     // Write updated phonebook to file :
     write_json(&path, &json_file)?;
 
@@ -134,7 +140,7 @@ pub fn delete(&mut self, id: PersonID) -> Result<()> {
     let before = self.phonebook.len();
     self.phonebook.retain(|p| p.id != id);
     let after = self.phonebook.len();
-    if after - before == 0 {
+    if after == before {
         log::info!("DELETE: id #{id} doesn't exist");
     }
     Ok(())
