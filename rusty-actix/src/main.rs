@@ -46,17 +46,66 @@ struct JsonFile {
 
 fn main() -> Result<()> {
     env_logger::init();
-    // let path = Path::new("../phonebook.json");
-    // let path = Path::new("files/mock.json");
     // Test adding to an empty json
-    let path = Path::new("files/mock_empty.json");
-    let out_path = Path::new("files/mock_out_empty.json");
+    // let path = Path::new("files/mock_empty.json");
+    // let out_path = Path::new("files/mock_out_empty.json");
+    // Test reading and writing to same file: 
+    
+    let path = Path::new("files/mock.json");
+    let mut json_file = read_json(&path)?;
+
+    // TODO : write procedures to manipulate the phonebook
+    // Then we can trouble ourselves with updating a pre-existing entry
+    // also we must ensure that if a "name" already exists, it shouldn't be added with an appropriate error msg
+    // "Names should be unique"
+
+    // TODO : Write a convenient decl macro for add_to_phonebook which removes the need for ..Default::default()
+    json_file.print_phonebook();
+    json_file.add_to_phonebook(
+        Person {
+            name: "Abhishek R Shah".into(),
+            number: "999-123".into(),
+            ..Default::default()
+        },
+    )?;
+    // This should be rejected because name isn't unique, only the whitespaces are more
+    json_file.add_to_phonebook(
+        Person {
+            name: "Abhishek   R     Shah".into(),
+            number: "999-123".into(),
+            ..Default::default()
+        }
+    )?;
+    json_file.add_to_phonebook(
+        Person {
+            name: "Harry Potter".into(),
+            number: "4413".into(),
+            ..Default::default()
+        }
+    )?;
+    log::debug!("\nAfter Mutation:\n");
+    json_file.print_phonebook();
+    // Write updated phonebook to file :
+    write_json(&path, &json_file)?;
+
+    Ok(())
+}
+
+fn write_json(path: &Path, json_file: &JsonFile) -> Result<()> {
+    // You can use this lib for locking https://docs.rs/fs2/latest/fs2/trait.FileExt.html
+    // and this for ensuring everything got written https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all
+    let wrt = File::options().write(true).open(path).map_err(|err| Err::Io(err)).with_context(|| format!("Writing json failed at `{}`", path.display()))?;
+    serde_json::to_writer_pretty(wrt, &json_file)?;
+    Ok(())
+}
+
+fn read_json(path: &Path) -> Result<JsonFile> {
     let rdr = File::options()
-        .write(true)
-        .read(true)
-        .open(path)
-        .map_err(|err| Err::Io(err))
-        .with_context(|| format!("Failed to read `{}`", path.display()))?;
+    .write(true)
+    .read(true)
+    .open(path)
+    .map_err(|err| Err::Io(err))
+    .with_context(|| format!("Failed to read `{}`", path.display()))?;
     // The content of the IO stream is deserialized directly from the stream without being buffered in memory by serde_json.
     // let phonebook = serde_json::from_reader::<File, JsonValue>(rdr)?;
     // https://github.com/serde-rs/json/issues/160
@@ -71,75 +120,72 @@ fn main() -> Result<()> {
             .with_context(|| "IO error at mmap")?
     };
 
-    let mut json_file = serde_json::from_slice::<JsonFile>(&bytes)
+    serde_json::from_slice::<JsonFile>(&bytes)
         .map_err(|err| Err::Json(err))
-        .with_context(|| "json file parse error")?;
-
-    // TODO : write procedures to manipulate the phonebook
-    // Then we can trouble ourselves with updating a pre-existing entry
-    // also we must ensure that if a "name" already exists, it shouldn't be added with an appropriate error msg
-    // "Names should be unique"
-
-    // Let's change one entry first
-    print_phonebook(&json_file.phonebook);
-    // mutate(&mut json_file.phonebook)?;
-    add_to_phonebook(
-        Person {
-            name: "Abhishek R Shah".into(),
-            number: "999-123".into(),
-            ..Default::default()
-        },
-        &mut json_file,
-    )?;
-    // This should be rejected because name isn't unique, only the whitespaces are more
-    add_to_phonebook(
-        Person {
-            name: "Abhishek   R     Shah".into(),
-            number: "999-123".into(),
-            ..Default::default()
-        },
-        &mut json_file,
-    )?;
-    log::debug!("\nAfter Mutation\n");
-    print_phonebook(&json_file.phonebook);
-    // Write updated phonebook to file :
-
-    let out = File::options().create(true).write(true).open(out_path)?;
-    serde_json::to_writer_pretty(out, &json_file)?;
-
-    Ok(())
+        .with_context(|| "json file parse error")    
 }
+#[allow(unused)]
+impl JsonFile {
 
-#[allow(dead_code)]
-fn mutate(p: &mut Vec<Person>) -> Result<()> {
-    for person in p.iter_mut() {
-        let p_name = &person.name;
-        if p_name.to_ascii_lowercase().starts_with("arto")
-            && p_name.to_ascii_lowercase().ends_with("hellas")
-        {
-            // *person.name is wrong syntax because `.` has higher precedence than `*`
-            // (*person).name = String::from("Cassandra Fox");
-            let _arto = std::mem::replace(&mut person.name, String::from("Cassandra Fox"));
-            println!("Arto Hellas found and Deleted! ^_^");
-        }
+/// Delete an entry 
+pub fn delete(&mut self, id: PersonID) -> Result<()> {
+    // iter() returns references
+    // self.phonebook = self.phonebook.into_iter().filter(|p| p.id != id).collect();
+    let before = self.phonebook.len();
+    self.phonebook.retain(|p| p.id != id);
+    let after = self.phonebook.len();
+    if after - before == 0 {
+        log::info!("DELETE: id #{id} doesn't exist");
     }
-
     Ok(())
 }
+/// Edit a pre-existing phonebook entry
+pub fn update(&mut self, id: PersonID, p: Person) -> Result<()> {
+    let entry = self
+        .phonebook
+        .iter_mut()
+        .find(|person| person.id == id)
+        .ok_or(Err::PhonebookEntry)
+        .with_context(|| {
+            log::info!("id: {id} does not exist in the phonebook");
+            "id does not exist in phonebook"
+        })?;
+    
+    let (nname, nnum) = (p.name, p.number);
+    // Check if they are not default values
+    if nname.len() > 0 {
+        entry.name = nname;
+    }
+    if nnum.len() > 0 {
+        entry.number = nnum;
+    }
+    // Ignore ID change requests
+    Ok(())
+}
+// TODO : Sort by key (id) and then perform a binary search for performance gains
+/// Fetch a person details by their id
+pub fn get(&self, id: PersonID) -> Option<&Person> {
+    self.phonebook.iter().find(|p| p.id == id)
+}
 
-fn print_phonebook(p: &Vec<Person>) {
-    let entries = p.iter();
+pub fn print_phonebook(&self) {
+    let entries = self.phonebook.iter();
     for person in entries {
         println!("{person}");
     }
 }
 
 /// Add to a phonebook only if that name is unique
-fn add_to_phonebook(mut p: Person, file: &mut JsonFile) -> Result<()> {
-    let id = generate_id(&file);
+pub fn add_to_phonebook(&mut self, mut p: Person) -> Result<()> {
+    // Handle bad requests such as an `id` not being in their default state 0_u128
+    if self.get(p.id).is_some() {
+        log::warn!("Person with id {} already exists in the phonebook",p.id);
+        return Err(Err::PhonebookEntry).with_context(|| format!("Person with id {} already exists, please do not provide an id", p.id));
+    }
+    let id = self.generate_id();
     p.id = id;
-    if !check_if_name_exists(&p.name, &file)? {
-        file.phonebook.push(p);
+    if !self.check_if_name_exists(&p.name)? {
+        self.phonebook.push(p);
     } else {
         log::warn!(
             "Name {} already exists in the phonebook. Names must be unique",
@@ -149,8 +195,8 @@ fn add_to_phonebook(mut p: Person, file: &mut JsonFile) -> Result<()> {
     Ok(())
 }
 
-fn generate_id(p: &JsonFile) -> PersonID {
-    let max_phonebook_id = p
+fn generate_id(&self) -> PersonID {
+    let max_phonebook_id = self
         .phonebook
         .iter()
         .max_by_key(|person| (**person).id)
@@ -163,7 +209,7 @@ fn generate_id(p: &JsonFile) -> PersonID {
     } else {
         max_phonebook_id + 1
     };
-    while matches!(p.phonebook.iter().next(), Some(person) if person.id == candidate ) {
+    while matches!(self.phonebook.iter().next(), Some(person) if person.id == candidate ) {
         // This debug should practically never log
         log::debug!("candidate ID collision found");
         candidate = rand::random::<PersonID>();
@@ -171,7 +217,7 @@ fn generate_id(p: &JsonFile) -> PersonID {
     candidate
 }
 
-fn check_if_name_exists(new_name: &str, file: &JsonFile) -> Result<bool> {
+fn check_if_name_exists(&self, new_name: &str) -> Result<bool> {
     let new_name = new_name.trim().to_lowercase();
     let mut new_name = new_name.split_whitespace();
     // Important to get length before calling any `next`|`next_back`
@@ -185,16 +231,17 @@ fn check_if_name_exists(new_name: &str, file: &JsonFile) -> Result<bool> {
     );
     // We take the size_hint before calling `next` and `next_back` on new_name and name
     // exactly once
-    Ok(file
+    Ok(self
         .phonebook
         .iter()
         .map(|person| person.name.trim().to_lowercase())
         .any(|pname| {
             let mut name = pname.split_whitespace();
             let name_len = name.size_hint();
-            name.next().expect("Safe to unwrap pre-existing fname") == new_fname
+            // compare upper bounds
+            name_len.1 == new_name_len.1 
+                && name.next().expect("Safe to unwrap pre-existing fname") == new_fname
                 && matches!(name.next_back(), Some(lname) if matches!(new_lname, Some(n) if n == lname))
-                // compare the upper bounds
-                && name_len.1 == new_name_len.1 
         }))
+    }
 }
