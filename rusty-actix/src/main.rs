@@ -20,8 +20,8 @@ enum Err {
     Io(#[from] io::Error),
     #[error("JSON ERROR")]
     Json(#[from] serde_json::error::Error),
-    // #[error("JSON Array Parse Error")]
-    // JsonArrayParseError,
+    #[error("Phonebook entry doesn't match expectation")]
+    PhonebookEntry,
 }
 
 type PersonID = u128;
@@ -76,7 +76,6 @@ fn main() -> Result<()> {
         .with_context(|| "json file parse error")?;
 
     // TODO : write procedures to manipulate the phonebook
-    // For starters we want to create entries, delete entries, generate IDs using a random function
     // Then we can trouble ourselves with updating a pre-existing entry
     // also we must ensure that if a "name" already exists, it shouldn't be added with an appropriate error msg
     // "Names should be unique"
@@ -84,14 +83,23 @@ fn main() -> Result<()> {
     // Let's change one entry first
     print_phonebook(&json_file.phonebook);
     // mutate(&mut json_file.phonebook)?;
-    add_to_phonbook(
+    add_to_phonebook(
         Person {
-            name: "Abhishek Shah".into(),
-            number: "999".into(),
+            name: "Abhishek R Shah".into(),
+            number: "999-123".into(),
             ..Default::default()
         },
         &mut json_file,
-    );
+    )?;
+    // This should be rejected because name isn't unique, only the whitespaces are more
+    add_to_phonebook(
+        Person {
+            name: "Abhishek   R     Shah".into(),
+            number: "999-123".into(),
+            ..Default::default()
+        },
+        &mut json_file,
+    )?;
     log::debug!("\nAfter Mutation\n");
     print_phonebook(&json_file.phonebook);
     // Write updated phonebook to file :
@@ -102,6 +110,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn mutate(p: &mut Vec<Person>) -> Result<()> {
     for person in p.iter_mut() {
         let p_name = &person.name;
@@ -127,10 +136,18 @@ fn print_phonebook(p: &Vec<Person>) {
 }
 
 /// Add to a phonebook only if that name is unique
-fn add_to_phonbook(mut p: Person, file: &mut JsonFile) {
+fn add_to_phonebook(mut p: Person, file: &mut JsonFile) -> Result<()> {
     let id = generate_id(&file);
     p.id = id;
-    file.phonebook.push(p);
+    if !check_if_name_exists(&p.name, &file)? {
+        file.phonebook.push(p);
+    } else {
+        log::warn!(
+            "Name {} already exists in the phonebook. Names must be unique",
+            &p.name
+        );
+    }
+    Ok(())
 }
 
 fn generate_id(p: &JsonFile) -> PersonID {
@@ -139,13 +156,42 @@ fn generate_id(p: &JsonFile) -> PersonID {
         .iter()
         .max_by_key(|person| (**person).id)
         .and_then(|person| Some(person.id))
-        .unwrap_or(<PersonID>::default() + 1);
+        .unwrap_or(<PersonID>::default());
     /* IDs should start with 1 incase this phonebook is empty */
     // Generates a very large id
-    let mut candidate = max_phonebook_id + 1;
+    let mut candidate = if max_phonebook_id == 0 {
+        1
+    } else {
+        max_phonebook_id + 1
+    };
     while matches!(p.phonebook.iter().next(), Some(person) if person.id == candidate ) {
+        // This debug should practically never log
         log::debug!("candidate ID collision found");
         candidate = rand::random::<PersonID>();
     }
     candidate
+}
+
+fn check_if_name_exists(new_name: &str, file: &JsonFile) -> Result<bool> {
+    let new_name = new_name.trim().to_lowercase();
+    let new_name_len = new_name.len(); // new_name.cloned().count();
+    let mut new_name = new_name.split_whitespace();
+    let (new_fname, new_lname) = (
+        new_name
+            .next()
+            .ok_or(Err::PhonebookEntry)
+            .with_context(|| "Phonebook entry should have a first name")?,
+        new_name.next_back(),
+    );
+
+    Ok(file
+        .phonebook
+        .iter()
+        .map(|person| person.name.trim().to_lowercase().split_whitespace())
+        .any(|name| {
+            name.next().expect("Safe to unwrap pre-existing fname") == new_fname
+                && matches!(name.next_back(), Some(lname) if matches!(new_lname, Some(n) if n == lname))
+                && name.len() == new_name_len
+            // TODO: What if new_name has more spaces between fname and lname so as to confuse this condition?
+        }))
 }
