@@ -1,0 +1,2 @@
+mock and mock_output remain in the "files" folder to avoid cargo watch trigger.
+we use `cargo watch --ignore "files/*" -x r` to avoid reruninng cargo

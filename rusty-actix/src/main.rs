@@ -5,8 +5,9 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
+// use serde_json::Value as JsonValue;
 use std::io;
+
 // use io::BufReader;
 // use io::Result;
 // use io::Read;
@@ -19,13 +20,15 @@ enum Err {
     Io(#[from] io::Error),
     #[error("JSON ERROR")]
     Json(#[from] serde_json::error::Error),
-    #[error("JSON Array Parse Error")]
-    JsonArrayParseError,
+    // #[error("JSON Array Parse Error")]
+    // JsonArrayParseError,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+type PersonID = u128;
+
+#[derive(Serialize, Deserialize, Debug, Default)]
 struct Person {
-    id: u128,
+    id: PersonID,
     name: String,
     number: String,
 }
@@ -42,8 +45,12 @@ struct JsonFile {
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
     // let path = Path::new("../phonebook.json");
-    let path = Path::new("mock.json");
+    // let path = Path::new("files/mock.json");
+    // Test adding to an empty json
+    let path = Path::new("files/mock_empty.json");
+    let out_path = Path::new("files/mock_out_empty.json");
     let rdr = File::options()
         .write(true)
         .read(true)
@@ -67,7 +74,6 @@ fn main() -> Result<()> {
     let mut json_file = serde_json::from_slice::<JsonFile>(&bytes)
         .map_err(|err| Err::Json(err))
         .with_context(|| "json file parse error")?;
-    let mut phonebook = json_file.phonebook;
 
     // TODO : write procedures to manipulate the phonebook
     // For starters we want to create entries, delete entries, generate IDs using a random function
@@ -76,10 +82,22 @@ fn main() -> Result<()> {
     // "Names should be unique"
 
     // Let's change one entry first
-    print_phonebook(&phonebook);
-    mutate(&mut phonebook)?;
-    println!("\nAfter Mutation\n");
-    print_phonebook(&phonebook);
+    print_phonebook(&json_file.phonebook);
+    // mutate(&mut json_file.phonebook)?;
+    add_to_phonbook(
+        Person {
+            name: "Abhishek Shah".into(),
+            number: "999".into(),
+            ..Default::default()
+        },
+        &mut json_file,
+    );
+    log::debug!("\nAfter Mutation\n");
+    print_phonebook(&json_file.phonebook);
+    // Write updated phonebook to file :
+
+    let out = File::options().create(true).write(true).open(out_path)?;
+    serde_json::to_writer_pretty(out, &json_file)?;
 
     Ok(())
 }
@@ -92,7 +110,8 @@ fn mutate(p: &mut Vec<Person>) -> Result<()> {
         {
             // *person.name is wrong syntax because `.` has higher precedence than `*`
             // (*person).name = String::from("Cassandra Fox");
-            let arto = std::mem::replace(&mut person.name, String::from("Cassandra Fox"));
+            let _arto =
+                std::mem::replace(&mut person.name, String::from("Cassandra Fox"));
             println!("Arto Hellas found and Deleted! ^_^");
         }
     }
@@ -105,4 +124,28 @@ fn print_phonebook(p: &Vec<Person>) {
     for person in entries {
         println!("{person}");
     }
+}
+
+/// Add to a phonebook only if that name is unique
+fn add_to_phonbook(mut p: Person, file: &mut JsonFile) {
+    let id = generate_id(&file);
+    p.id = id;
+    file.phonebook.push(p);
+}
+
+fn generate_id(p: &JsonFile) -> PersonID {
+    let max_phonebook_id = p
+        .phonebook
+        .iter()
+        .max_by_key(|person| (**person).id)
+        .and_then(|person| Some(person.id))
+        .unwrap_or(<PersonID>::default() + 1);
+    /* IDs should start with 1 incase this phonebook is empty */
+    // Generates a very large id
+    let mut candidate = max_phonebook_id + 1;
+    while matches!(p.phonebook.iter().next(), Some(person) if person.id == candidate ) {
+        log::debug!("candidate ID collision found");
+        candidate = rand::random::<PersonID>();
+    }
+    candidate
 }
