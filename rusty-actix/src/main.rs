@@ -119,8 +119,7 @@ fn mutate(p: &mut Vec<Person>) -> Result<()> {
         {
             // *person.name is wrong syntax because `.` has higher precedence than `*`
             // (*person).name = String::from("Cassandra Fox");
-            let _arto =
-                std::mem::replace(&mut person.name, String::from("Cassandra Fox"));
+            let _arto = std::mem::replace(&mut person.name, String::from("Cassandra Fox"));
             println!("Arto Hellas found and Deleted! ^_^");
         }
     }
@@ -174,8 +173,9 @@ fn generate_id(p: &JsonFile) -> PersonID {
 
 fn check_if_name_exists(new_name: &str, file: &JsonFile) -> Result<bool> {
     let new_name = new_name.trim().to_lowercase();
-    let new_name_len = new_name.len(); // new_name.cloned().count();
     let mut new_name = new_name.split_whitespace();
+    // Important to get length before calling any `next`|`next_back`
+    let new_name_len = new_name.size_hint();
     let (new_fname, new_lname) = (
         new_name
             .next()
@@ -183,15 +183,18 @@ fn check_if_name_exists(new_name: &str, file: &JsonFile) -> Result<bool> {
             .with_context(|| "Phonebook entry should have a first name")?,
         new_name.next_back(),
     );
-
+    // We take the size_hint before calling `next` and `next_back` on new_name and name
+    // exactly once
     Ok(file
         .phonebook
         .iter()
-        .map(|person| person.name.trim().to_lowercase().split_whitespace())
-        .any(|name| {
+        .map(|person| person.name.trim().to_lowercase())
+        .any(|pname| {
+            let mut name = pname.split_whitespace();
+            let name_len = name.size_hint();
             name.next().expect("Safe to unwrap pre-existing fname") == new_fname
                 && matches!(name.next_back(), Some(lname) if matches!(new_lname, Some(n) if n == lname))
-                && name.len() == new_name_len
-            // TODO: What if new_name has more spaces between fname and lname so as to confuse this condition?
+                // compare the upper bounds
+                && name_len.1 == new_name_len.1 
         }))
 }
