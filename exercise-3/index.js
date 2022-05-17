@@ -11,8 +11,14 @@ app.set("json spaces", 2);
 let phonebook = require("./phonebook");
 // console.log(phonebook)
 
-// Initialize morgan
-const morgan_logger = morgan(':method :url :status | Content-Length : :res[content-length] octects \n:response-time ms');
+// Step 8: Configure to show the POST content { warning : may contain sensitive info }
+morgan.token("bodyJSON", function (req, res) {
+  return JSON.stringify(req.body);
+});
+const morgan_logger = morgan(
+  ":method :url :status | Content-Length : :res[content-length] octects \n:response-time ms \n:bodyJSON"
+);
+// Initialize morgan with tiny config
 // const morgan_logger = morgan("tiny");
 // Step 7: Register the morgan middleware to this app for logging:
 app.use(morgan_logger);
@@ -85,7 +91,7 @@ app.post("/api/persons", (req, res) => {
       .status(400)
       .json({ error: "Name must be unique! (I know this is stupid but)" });
 
-  console.log(personInfo);
+  // console.log(personInfo);
   const personId = generatePersonId();
   personInfo.id = personId;
   phonebook = phonebook.concat(personInfo);
