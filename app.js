@@ -1,4 +1,6 @@
-const express = require("express");
+import express from "express";
+// Es6 way -> 
+import requestLogger from "./my_request_logger.js";
 let notes = [
   {
     id: 0,
@@ -27,10 +29,19 @@ let notes = [
 ];
 const app = express();
 app.set("json spaces", 2);
-//  The json-parser functions so that it takes the JSON data of a request,
+// The json-parser functions so that it takes the JSON data of a request,
 // transforms it into a JavaScript object and then attaches it to the body property of the request object
 // before the route handler is called.
+// Notice that json-parser is taken into use before the requestLogger middleware,
+// because otherwise request.body will not be initialized when the logger is executed!
 app.use(express.json());
+app.use(requestLogger);
+
+// const unknownEndpoint = (_request, response) => {
+//   response.status(404).send({ error: 'unknown endpoint' })
+// }
+
+// app.use(unknownEndpoint);
 
 app.get("/", (rq, rs) => {
   rs.send("<h1>Hello World</h1>");
@@ -94,4 +105,4 @@ app.post("/notes", (rq, rs) => {
   rs.json(note);
 });
 
-module.exports = app;
+export default app;
