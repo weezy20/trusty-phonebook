@@ -32,16 +32,16 @@ app.set("json spaces", 2);
 // The json-parser functions so that it takes the JSON data of a request,
 // transforms it into a JavaScript object and then attaches it to the body property of the request object
 // before the route handler is called.
+// *---------------------------------------------------------------------------------*
 // Notice that json-parser is taken into use before the requestLogger middleware,
 // because otherwise request.body will not be initialized when the logger is executed!
+
+// Theory : 
+// Middleware functions have to be taken into use before routes if we want them to be executed before the route event handlers
+// are called. There are also situations where we want to define middleware functions after routes. 
+// In practice, this means that we are defining middleware functions that are only called if no route handles the HTTP request.
 app.use(express.json());
 app.use(requestLogger);
-
-// const unknownEndpoint = (_request, response) => {
-//   response.status(404).send({ error: 'unknown endpoint' })
-// }
-
-// app.use(unknownEndpoint);
 
 app.get("/", (rq, rs) => {
   rs.send("<h1>Hello World</h1>");
@@ -105,4 +105,15 @@ app.post("/notes", (rq, rs) => {
   rs.json(note);
 });
 
+// Notice that we define this handler and `use` it in express at the bottom, after 
+// all the routes have been registered. This ensures that this middleware is run only 
+// after the express server has fallen through all the previous middleware/routes
+const unknownEndpoint = (_request, response) => {
+  response.status(404).send({ error: 'unknown endpoint' })
+}
+// Register the above handler, the handler may be defined anywhere of course
+// but we are using () => {} syntax so we define it just before we use it
+app.use(unknownEndpoint);
+
 export default app;
+ 

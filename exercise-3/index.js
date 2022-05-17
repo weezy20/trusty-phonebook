@@ -1,5 +1,7 @@
 const express = require("express");
 const app = express();
+// Step 7: Add the morgan middleware to this app for logging:
+const morgan = require("morgan");
 
 // Step 1 : return a hardcoded list of phonebook entries on
 // http://localhost:3001/api/persons
@@ -8,6 +10,12 @@ const PORT = 3001;
 app.set("json spaces", 2);
 let phonebook = require("./phonebook");
 // console.log(phonebook)
+
+// Initialize morgan
+const morgan_logger = morgan(':method :url :status | Content-Length : :res[content-length] octects \n:response-time ms');
+// const morgan_logger = morgan("tiny");
+// Step 7: Register the morgan middleware to this app for logging:
+app.use(morgan_logger);
 
 app.get("/api/persons", (req, res) => {
   res.json(phonebook);
