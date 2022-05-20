@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use std::io;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::File;
+use std::io;
 use std::path::Path;
-// If interested in the gory details of anyhow::Result<T, E = anyhow::Error> 
+// If interested in the gory details of anyhow::Result<T, E = anyhow::Error>
 // https://rust-lang.github.io/rfcs/0213-defaulted-type-params.html
 // https://rust-lang.github.io/rfcs/0213-defaulted-type-params.html#type-parameters-with-defaults
 // TL;DR : Optional type params must after all non-optional ones
@@ -19,6 +19,8 @@ pub enum Err {
     #[error("Phonebook entry doesn't match expectation")]
     PhonebookEntry,
 }
+
+impl actix_web::error::ResponseError for Err {}
 
 pub type PersonID = u128;
 // TODO : How is PartialEq and PartialOrd implemented for Person struct?
@@ -183,22 +185,17 @@ impl JsonFile {
         // Handle bad requests such as an `id` not being in their default state 0_u128
         if self.get(p.id).is_some() {
             log::warn!("Person with id {} already exists in the phonebook", p.id);
-            return Err(Err::PhonebookEntry).with_context(|| {
-                format!(
-                    "Person with id {} already exists, please do not provide an id",
-                    p.id
-                )
-            });
+            return Err(Err::PhonebookEntry)
+                .with_context(|| format!("Person with id {} already exists, please do not provide an id", p.id));
         }
         let id = self.generate_id();
         p.id = id;
         if !self.check_if_name_exists(&p.name)? {
             self.phonebook.push(p);
         } else {
-            log::warn!(
-                "Name {} already exists in the phonebook. Names must be unique",
-                &p.name
-            );
+            log::warn!("Name {} already exists in the phonebook. Names must be unique", &p.name);
+            return Err(Err::PhonebookEntry)
+                .with_context(|| format!("Person with name {} already exists, Names must be unique", p.name));
         }
         Ok(())
     }
@@ -209,7 +206,6 @@ impl JsonFile {
         // }
         self.phonebook.sort_unstable_by_key(|p| p.id);
         log::info!("Phonebook sorted by id");
-        self.print_phonebook();
     }
 
     fn generate_id(&self) -> PersonID {
@@ -221,11 +217,7 @@ impl JsonFile {
             .unwrap_or(<PersonID>::default());
         /* IDs should start with 1 incase this phonebook is empty */
         // Generates a very large id
-        let mut candidate = if max_phonebook_id == 0 {
-            1
-        } else {
-            max_phonebook_id + 1
-        };
+        let mut candidate = if max_phonebook_id == 0 { 1 } else { max_phonebook_id + 1 };
         while matches!(self.phonebook.iter().next(), Some(person) if person.id == candidate ) {
             // This debug should practically never log
             log::debug!("candidate ID collision found");
@@ -249,16 +241,16 @@ impl JsonFile {
         // We take the size_hint before calling `next` and `next_back` on new_name and name
         // exactly once
         Ok(self
-        .phonebook
-        .iter()
-        .map(|person| person.name.trim().to_lowercase())
-        .any(|pname| {
-            let mut name = pname.split_whitespace();
-            let name_len = name.size_hint();
-            // compare upper bounds
-             name_len.1 == new_name_len.1
-                && name.next().expect("Safe to unwrap pre-existing fname") == new_fname
-                && matches!(name.next_back(), Some(lname) if matches!(new_lname, Some(n) if n == lname))
-        }))
+            .phonebook
+            .iter()
+            .map(|person| person.name.trim().to_lowercase())
+            .any(|pname| {
+                let mut name = pname.split_whitespace();
+                let name_len = name.size_hint();
+                // compare upper bounds
+                name_len.1 == new_name_len.1
+                    && name.next().expect("Safe to unwrap pre-existing fname") == new_fname
+                    && matches!(name.next_back(), Some(lname) if matches!(new_lname, Some(n) if n == lname))
+            }))
     }
 }

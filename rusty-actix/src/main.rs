@@ -5,7 +5,7 @@
 // use serde_json::Value as JsonValue;
 
 use ::phonebook::{read_json, write_json, Person};
-use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{error, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use anyhow::Result;
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
@@ -36,24 +36,22 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) -> impl Responder {
+async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) -> Result<HttpResponse, error::Error> {
     println!("POST recvd");
     let path = Path::new("files/mock.json");
     let person = person.into_inner();
     println!("{person:?}");
+    let mut json_file = read_json(path).unwrap();
+    json_file.add_to_phonebook(person).map_err(|e| {
+        log::warn!("{:?}", e);
+        error::ErrorInternalServerError(e)
+    })?;
+    // write_json(path, &mut json_file)?; // Does not work 
+    write_json(path, &mut json_file); 
     unsafe {
-        if let Some(ref mut json_file) = APP_JSON_FILE {
-            json_file.add_to_phonebook(person).unwrap();
-            write_json(path, json_file).unwrap();
-        } else {
-            let mut json_file = read_json(path).ok().unwrap();
-            json_file.add_to_phonebook(person).unwrap();
-
-            write_json(path, &mut json_file).unwrap();
-            APP_JSON_FILE = Some(json_file);
-        }
+        APP_JSON_FILE = Some(json_file);
     }
-    HttpResponse::Ok().finish()
+    Ok(HttpResponse::Ok().finish())
 }
 
 async fn get_phonebook_handler(_req: HttpRequest) -> impl Responder {
@@ -63,9 +61,7 @@ async fn get_phonebook_handler(_req: HttpRequest) -> impl Responder {
     unsafe {
         APP_JSON_FILE = Some(json_file);
     }
-    HttpResponse::Ok()
-        .content_type("application/json")
-        .body(payload)
+    HttpResponse::Ok().content_type("application/json").body(payload)
 }
 
 #[test]
