@@ -7,13 +7,14 @@
 use ::phonebook::{read_json, write_json, Person};
 use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use anyhow::Result;
-use phonebook::JsonFile;
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
 use std::{net::TcpListener, path::Path};
 // use io::BufReader;
 // use io::Result;
 // use io::Read;
+
+static mut APP_JSON_FILE: Option<phonebook::JsonFile> = None;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -26,27 +27,45 @@ async fn main() -> std::io::Result<()> {
     // let out_path = Path::new("files/mock_out_empty.json");
     // Test reading and writing to same file:
     HttpServer::new(move || {
-        App::new().route("/book", web::get().to(get_phonebook_handler))
-        .route("/book", web::post().to(post_phonebook_handler))
+        App::new()
+            .route("/book", web::get().to(get_phonebook_handler))
+            .route("/book", web::post().to(post_phonebook_handler))
     })
     .listen(tcp)?
     .run()
     .await
 }
 
-async fn post_phonebook_handler(_req: HttpRequest, mut data: web::Json<JsonFile>) -> impl Responder {
-    let path =  Path::new("files/mock.json");
-    // TODO : This is the wrong handler
-    write_json(path, &mut data).unwrap();
+async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) -> impl Responder {
+    println!("POST recvd");
+    let path = Path::new("files/mock.json");
+    let person = person.into_inner();
+    println!("{person:?}");
+    unsafe {
+        if let Some(ref mut json_file) = APP_JSON_FILE {
+            json_file.add_to_phonebook(person).unwrap();
+            write_json(path, json_file).unwrap();
+        } else {
+            let mut json_file = read_json(path).ok().unwrap();
+            json_file.add_to_phonebook(person).unwrap();
+
+            write_json(path, &mut json_file).unwrap();
+            APP_JSON_FILE = Some(json_file);
+        }
+    }
     HttpResponse::Ok().finish()
 }
 
 async fn get_phonebook_handler(_req: HttpRequest) -> impl Responder {
-    let phonebook = read_json(Path::new("files/mock.json")).unwrap();
-    let phonebook = serde_json::to_string_pretty(&phonebook).unwrap();
+    println!("GET recvd");
+    let json_file = read_json(Path::new("files/mock.json")).unwrap();
+    let payload = serde_json::to_string_pretty(&json_file).unwrap();
+    unsafe {
+        APP_JSON_FILE = Some(json_file);
+    }
     HttpResponse::Ok()
         .content_type("application/json")
-        .body(phonebook)
+        .body(payload)
 }
 
 #[test]

@@ -5,7 +5,7 @@
 // or #[macro_export] which also does the same. In addition to that #[macro_export] also allows
 // other crates to import and use your macro instead of using crate::{macro_name}
 // See rocket macros for instance
-
+#[allow(unused)]
 macro_rules! person {
     ($name:expr, $num:expr) => {{
         Person {
