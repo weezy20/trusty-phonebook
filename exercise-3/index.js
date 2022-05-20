@@ -12,11 +12,11 @@ let phonebook = require("./phonebook");
 // console.log(phonebook)
 
 // Step 8: Configure to show the POST content { warning : may contain sensitive info }
-morgan.token("bodyJSON", function (req, res) {
+morgan.token("_bodyJSON", function (req, res) {
   return JSON.stringify(req.body);
 });
 const morgan_logger = morgan(
-  ":method :url :status | Content-Length : :res[content-length] octects \n:response-time ms \n:bodyJSON"
+  ":method :url :status | Content-Length : :res[content-length] octects \n:response-time ms \n:_bodyJSON"
 );
 // Initialize morgan with tiny config
 // const morgan_logger = morgan("tiny");
