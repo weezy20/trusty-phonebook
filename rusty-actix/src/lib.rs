@@ -17,10 +17,10 @@ pub enum Err {
     #[error("JSON ERROR")]
     Json(#[from] serde_json::error::Error),
     #[error("Phonebook entry doesn't match expectation")]
-    PhonebookEntry,
+    PhonebookEntry(String),
 }
 
-impl actix_web::error::ResponseError for Err {}
+// impl actix_web::error::ResponseError for Err {}
 
 pub type PersonID = u128;
 // TODO : How is PartialEq and PartialOrd implemented for Person struct?
@@ -142,7 +142,7 @@ impl JsonFile {
             .phonebook
             .iter_mut()
             .find(|person| person.id == id)
-            .ok_or(Err::PhonebookEntry)
+            .ok_or(Err::PhonebookEntry("id does not exist".into()))
             .with_context(|| {
                 log::info!("id: {id} does not exist in the phonebook");
                 "id does not exist in phonebook"
@@ -185,7 +185,7 @@ impl JsonFile {
         // Handle bad requests such as an `id` not being in their default state 0_u128
         if self.get(p.id).is_some() {
             log::warn!("Person with id {} already exists in the phonebook", p.id);
-            return Err(Err::PhonebookEntry)
+            return Err(Err::PhonebookEntry("Person ID already exists".into()))
                 .with_context(|| format!("Person with id {} already exists, please do not provide an id", p.id));
         }
         let id = self.generate_id();
@@ -194,7 +194,7 @@ impl JsonFile {
             self.phonebook.push(p);
         } else {
             log::warn!("Name {} already exists in the phonebook. Names must be unique", &p.name);
-            return Err(Err::PhonebookEntry)
+            return Err(Err::PhonebookEntry("Duplicate name".into()))
                 .with_context(|| format!("Person with name {} already exists, Names must be unique", p.name));
         }
         Ok(())
@@ -234,7 +234,7 @@ impl JsonFile {
         let (new_fname, new_lname) = (
             new_name
                 .next()
-                .ok_or(Err::PhonebookEntry)
+                .ok_or(Err::PhonebookEntry("First name missing".into()))
                 .with_context(|| "Phonebook entry should have a first name")?,
             new_name.next_back(),
         );

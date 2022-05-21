@@ -5,7 +5,7 @@
 // use serde_json::Value as JsonValue;
 
 use ::phonebook::{read_json, write_json, Person};
-use actix_web::{error, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{error as actix_error, http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use anyhow::Result;
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
@@ -36,7 +36,10 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) -> Result<HttpResponse, error::Error> {
+async fn post_phonebook_handler(
+    _req: HttpRequest,
+    person: web::Json<Person>,
+) -> Result<HttpResponse, actix_error::Error> {
     println!("POST recvd");
     let path = Path::new("files/mock.json");
     let person = person.into_inner();
@@ -44,10 +47,10 @@ async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) ->
     let mut json_file = read_json(path).unwrap();
     json_file.add_to_phonebook(person).map_err(|e| {
         log::warn!("{:?}", e);
-        error::ErrorInternalServerError(e)
+        actix_error::ErrorInternalServerError(e)
     })?;
-    // write_json(path, &mut json_file)?; // Does not work 
-    write_json(path, &mut json_file); 
+    write_json(path, &mut json_file).actix_result()?; 
+    //  write_json(path, &mut json_file);
     unsafe {
         APP_JSON_FILE = Some(json_file);
     }
@@ -85,4 +88,26 @@ fn test_methods() -> Result<()> {
 
     debug_assert_eq!(None, json_file.get(10));
     Ok(())
+}
+
+pub trait IntoActixResult<T> {
+    fn actix_result(self) -> core::result::Result<T, actix_web::Error>;
+}
+use phonebook::Err as AppErr;
+impl<T> IntoActixResult<T> for anyhow::Result<T, anyhow::Error> {
+    fn actix_result(self) -> core::result::Result<T, actix_web::Error> {
+        match self {
+            Ok(val) => Ok(val),
+            Err(err) => match err.downcast() {
+                Ok(AppErr::Io(inner)) => {
+                    Err(actix_error::InternalError::new(inner, StatusCode::INTERNAL_SERVER_ERROR).into())
+                }
+                Ok(AppErr::Json(inner)) => Err(actix_error::ErrorInternalServerError(inner)),
+                Ok(AppErr::PhonebookEntry(inner)) => Err(actix_error::ErrorBadRequest(inner)),
+                _ => {
+                    Err(actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR).into())
+                }
+            },
+        }
+    }
 }
