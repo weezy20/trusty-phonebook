@@ -37,7 +37,7 @@ impl Display for Person {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct JsonFile {
     phonebook: Vec<Person>,
 }
@@ -171,6 +171,10 @@ impl JsonFile {
         // self.phonebook.iter().find(|p| p.id == id)
     }
 
+    pub fn get_by_name(&self, name : &str) -> Option<&Person> {
+        todo!()
+    }
+
     pub fn print_phonebook(&self) {
         let entries = self.phonebook.iter();
         println!("❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯❯");
@@ -253,4 +257,28 @@ impl JsonFile {
                     && matches!(name.next_back(), Some(lname) if matches!(new_lname, Some(n) if n == lname))
             }))
     }
+}
+
+
+#[test]
+fn test_methods() -> Result<()> {
+    let path = Path::new("files/mock.json");
+    let mut json_file = read_json(&path)?;
+
+    println!("Before any operation:");
+    json_file.print_phonebook();
+    json_file.add_to_phonebook(person!("Abhishek R Shah", "999-123"))?;
+    // This should be rejected because name isn't unique, only the whitespaces are more
+    json_file.add_to_phonebook(person!("Abhishek   R     Shah", "999-123"))?;
+    json_file.add_to_phonebook(person!("Harry puttar", "999-123123128930yu1893h"))?;
+    json_file.update(1, person!("Cassandra Fox", "099-887766"))?;
+    json_file.delete(4)?;
+    log::debug!("\nAfter Mutation:\n");
+    json_file.print_phonebook();
+    println!("Writing JSON to {}", path.display());
+    // Write updated phonebook to file :
+    write_json(&path, &mut json_file)?;
+
+    debug_assert_eq!(None, json_file.get(10));
+    Ok(())
 }

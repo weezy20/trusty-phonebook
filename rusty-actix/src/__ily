@@ -1,0 +1,167 @@
+use actix_http::StatusCode;
+use actix_web::cookie::Cookie;
+use actix_web::{HttpResponse, ResponseError};
+use base62::DecodeError;
+use parse_display::Display;
+use serde::Serialize;
+use std::borrow::Cow;
+use std::cell::RefCell;
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct ApiResult<D: Serialize> {
+    pub success: bool,
+    pub errors: Vec<String>,
+    pub message: String,
+    pub data: D,
+}
+
+#[derive(Debug, Display)]
+#[display("ApiError")]
+pub(crate) struct ApiError {
+    pub status_code: StatusCode,
+    pub error_messages: RefCell<Option<Vec<String>>>,
+    pub message: Cow<'static, str>,
+    pub delete_cookies: Vec<Cookie<'static>>,
+}
+
+impl ApiError {
+    pub(crate) fn new(status_code: StatusCode, message: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            status_code,
+            error_messages: RefCell::new(Some(vec![])),
+            message: message.into(),
+            delete_cookies: vec![],
+        }
+    }
+    pub(crate) fn new_with_error_messages(
+        status_code: StatusCode,
+        message: impl Into<Cow<'static, str>>,
+        error_messages: Vec<String>,
+    ) -> Self {
+        Self {
+            status_code,
+            error_messages: RefCell::new(Some(error_messages)),
+            message: message.into(),
+            delete_cookies: vec![],
+        }
+    }
+    pub(crate) fn new_with_delete_cookies(
+        status_code: StatusCode,
+        message: impl Into<Cow<'static, str>>,
+        delete_cookies: impl IntoIterator<Item = Cookie<'static>>,
+    ) -> Self {
+        Self {
+            status_code,
+            error_messages: RefCell::new(Some(vec![])),
+            message: message.into(),
+            delete_cookies: delete_cookies.into_iter().collect(),
+        }
+    }
+    pub(crate) fn new_with_error_and_delete_cookies(
+        status_code: StatusCode,
+        message: impl Into<Cow<'static, str>>,
+        error_messages: Vec<String>,
+        delete_cookies: impl IntoIterator<Item = Cookie<'static>>,
+    ) -> Self {
+        Self {
+            status_code,
+            error_messages: RefCell::new(Some(error_messages)),
+            message: message.into(),
+            delete_cookies: delete_cookies.into_iter().collect(),
+        }
+    }
+}
+
+impl ResponseError for ApiError {
+    fn status_code(&self) -> actix_http::StatusCode {
+        self.status_code
+    }
+
+    fn error_response(&self) -> actix_web::HttpResponse {
+        let mut res = HttpResponse::build(self.status_code());
+
+        let result = ApiResult {
+            success: false,
+            errors: self.error_messages.borrow_mut().take().unwrap(),
+            message: self.message.clone().into_owned(),
+            data: None::<()>,
+        };
+
+        for cookie in &self.delete_cookies {
+            res.del_cookie(cookie);
+        }
+
+        res.json(result)
+    }
+}
+
+pub(crate) trait IntoApiError<T>
+where
+    Self: Sized,
+{
+    fn into_api_error(self) -> Result<T>;
+}
+
+pub(crate) trait IntoApiErrorWithExtra<T, E>
+where
+    Self: Sized,
+{
+    fn into_api_error_with_extra(self, extra: E) -> Result<T>;
+}
+
+impl<T> IntoApiError<T> for std::result::Result<T, sqlx_core::error::Error> {
+    fn into_api_error(self) -> Result<T> {
+        self.map_err(|e| ApiError {
+            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            error_messages: RefCell::new(Some(vec![e.to_string()])),
+            message: "Database error".into(),
+            delete_cookies: vec![],
+        })
+    }
+}
+
+impl<T> IntoApiError<T> for std::result::Result<T, uuid::Error> {
+    fn into_api_error(self) -> Result<T> {
+        self.map_err(|e| ApiError {
+            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            error_messages: RefCell::new(Some(vec![e.to_string()])),
+            message: "Uuid error".into(),
+            delete_cookies: vec![],
+        })
+    }
+}
+
+impl<T> IntoApiErrorWithExtra<T, StatusCode> for std::result::Result<T, anyhow::Error> {
+    fn into_api_error_with_extra(self, status_code: StatusCode) -> Result<T> {
+        self.map_err(|e| ApiError {
+            status_code,
+            error_messages: RefCell::new(Some(vec![])),
+            message: e.to_string().into(),
+            delete_cookies: vec![],
+        })
+    }
+}
+
+impl<T> IntoApiError<T> for std::result::Result<T, chrono::ParseError> {
+    fn into_api_error(self) -> Result<T> {
+        self.map_err(|e| ApiError {
+            status_code: StatusCode::BAD_REQUEST,
+            error_messages: RefCell::new(Some(vec![e.to_string()])),
+            message: "Date parsing error".into(),
+            delete_cookies: vec![],
+        })
+    }
+}
+
+impl<T> IntoApiError<T> for std::result::Result<T, DecodeError> {
+    fn into_api_error(self) -> Result<T> {
+        self.map_err(|e| ApiError {
+            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            error_messages: RefCell::new(Some(vec![e.to_string()])),
+            message: "Base62 decoding error".into(),
+            delete_cookies: vec![],
+        })
+    }
+}
+
+pub(crate) type Result<T> = std::result::Result<T, ApiError>;
