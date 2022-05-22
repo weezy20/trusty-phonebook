@@ -26,6 +26,7 @@ pub type PersonID = u128;
 // TODO : How is PartialEq and PartialOrd implemented for Person struct?
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, PartialOrd)]
 pub struct Person {
+    #[serde(default)]
     pub id: PersonID,
     pub name: String,
     pub number: String,
