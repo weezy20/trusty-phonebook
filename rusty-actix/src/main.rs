@@ -6,24 +6,21 @@
 
 use ::phonebook::{read_json, write_json, JsonFile, Person};
 use actix_web::Result as ActixResult;
-use actix_web::{error as actix_error, http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{error as actix_error, http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer};
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
 mod into_actix_trait;
-
 use into_actix_trait::IntoActixResult;
 use lazy_static::lazy_static;
-use std::cell::RefCell;
 use std::net::TcpListener;
-use std::rc::Rc;
-use std::sync::Once;
+use std::sync::{Arc, Mutex, Once};
 
-
+// https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
+// Cannot call non-const fns in static/const context
 lazy_static! {
     static ref PHONEBOOK_PATH: &'static std::path::Path = &std::path::Path::new("files/mock.json");
+    static ref APP_JSON_FILE: Arc<Mutex<JsonFile>> = Arc::new(Mutex::new(JsonFile::default()));
 }
-// https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
-static mut APP_JSON_FILE: Rc<RefCell<JsonFile>> = Rc::new(RefCell::new(JsonFile::default()));
 static APP_INIT: Once = Once::new();
 
 pub(crate) type ActixResponse = ActixResult<HttpResponse>;
@@ -38,8 +35,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book", web::post().to(post_phonebook_handler))
-            // .route("/book/{name}", web::get().to(get_by_name))
-            // .route("/book/{id}", web::get().to(get_by_id))
+        // .route("/book/{name}", web::get().to(get_by_name))
+        // .route("/book/{id}", web::get().to(get_by_id))
     })
     .listen(tcp)?
     .run()
@@ -66,7 +63,13 @@ async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) ->
     let person = person.into_inner();
     println!("{person:?}");
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
-    let mut json_file = unsafe { &mut APP_JSON_FILE }; //read_json(path).unwrap();
+    let mutex = Arc::clone(&APP_JSON_FILE);
+    // If the Mutex was "poisoned" we should just `expect` on it since the poison happened on some other thread
+    // that we don't control. Should return internal server error
+    let mut json_file = mutex.lock().map_err::<actix_error::Error, _>(|_e| {
+        actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR).into()
+    })?;
+
     json_file.add_to_phonebook(person).map_err(|e| {
         log::warn!("{:?}", e);
         actix_error::ErrorInternalServerError(e)
@@ -78,23 +81,24 @@ async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) ->
 async fn get_phonebook_handler(_req: HttpRequest) -> ActixResponse {
     println!("GET recvd");
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
-    let json_file = unsafe { &APP_JSON_FILE }; //read_json(path).unwrap();
-    // Problem serde_json::error::Result<T> is returned here and must be converted to 
+    let json_file = APP_JSON_FILE
+        .lock()
+        .map_err(|_e| actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    // Problem serde_json::error::Result<T> is returned here and must be converted to
     // anyhow::Result<T> before actix_result() will work
     // let payload = serde_json::to_string_pretty(&json_file).actix_result()?;
     // Fortunately, we have from actix_web
     // impl ResponseError for serde_json::Error {}
 
-    let payload = serde_json::to_string_pretty(&json_file)?;
+    let payload = serde_json::to_string_pretty(&*json_file)?;
     Ok(HttpResponse::Ok().content_type("application/json").body(payload))
 }
 
 fn init() {
-    unsafe {
-        APP_INIT.call_once(|| {
-            log::error!("App initialization failed");
-            APP_JSON_FILE =
-                read_json(&PHONEBOOK_PATH).expect("Failed to read {PHONEBOOK_PATH}. App initialization failed");
-        })
-    }
+    APP_INIT.call_once(|| {
+        let json_file = read_json(&PHONEBOOK_PATH).expect("Failed to read {PHONEBOOK_PATH}. App initialization failed");
+        let mut mutex = APP_JSON_FILE.lock().expect("Infallible");
+        *mutex = json_file;
+    })
 }
