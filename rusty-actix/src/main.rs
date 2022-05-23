@@ -7,6 +7,7 @@
 use ::phonebook::{read_json, write_json, JsonFile, Person};
 use actix_web::Result as ActixResult;
 use actix_web::{error as actix_error, http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer};
+use phonebook::async_write_json;
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
 mod into_actix_trait;
@@ -51,18 +52,18 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-#[actix_web::get("/book/{id}")]
-async fn get_by_id(req: HttpRequest, path: web::Path<phonebook::PersonID>) -> ActixResponse {
-    let id = path.into_inner();
-    let mut json_file = lock_mutex!();
-    let person = json_file.get_by_id(id);
-    Ok(match person {
-        Some(p) => HttpResponse::Ok()
-        .body(p.serialize(&serde_json::Serializer))
-        .content_type("application/json"),
-        None => HttpResponse::NotFound(),
-    })
-}
+// #[actix_web::get("/book/{id}")]
+// async fn get_by_id(req: HttpRequest, path: web::Path<phonebook::PersonID>) -> ActixResponse {
+//     let id = path.into_inner();
+//     let mut json_file = lock_mutex!();
+//     let person = json_file.get_by_id(id);
+//     Ok(match person {
+//         Some(p) => HttpResponse::Ok()
+//         .body(serde_json::to_string(p))
+//         .content_type("application/json"),
+//         None => HttpResponse::NotFound(),
+//     })
+// }
 
 // #[actix_web::get("/book/{name}")]
 // async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResult<HttpResponse> {
@@ -73,11 +74,11 @@ async fn get_by_id(req: HttpRequest, path: web::Path<phonebook::PersonID>) -> Ac
 // }
 
 async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) -> ActixResponse {
-    println!("POST recvd");
     let person = person.into_inner();
-    println!("{person:?}");
+    println!("POST recvd {person:?}");
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
     let mutex = Arc::clone(&APP_JSON_FILE);
+    // Create a scope for mutex guard
     // If the Mutex was "poisoned" we should just `expect` on it since the poison happened on some other thread
     // that we don't control. Should return internal server error
     let mut json_file = mutex.lock().map_err::<actix_error::Error, _>(|_e| {
@@ -88,7 +89,11 @@ async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) ->
         log::warn!("{:?}", e);
         actix_error::ErrorInternalServerError(e)
     })?;
-    write_json(&PHONEBOOK_PATH, &mut json_file).await.actix_result()?;
+    drop(json_file);
+    // Mutex needs to be unlocked else async_write_json will fail and wait indefinitely
+    async_write_json(&PHONEBOOK_PATH, Arc::clone(&mutex))
+        .await
+        .actix_result()?;
     Ok(HttpResponse::Ok().finish())
 }
 

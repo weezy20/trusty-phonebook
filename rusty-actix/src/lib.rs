@@ -5,6 +5,10 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
+#[macro_use]
+mod macros;
 // If interested in the gory details of anyhow::Result<T, E = anyhow::Error>
 // https://rust-lang.github.io/rfcs/0213-defaulted-type-params.html
 // https://rust-lang.github.io/rfcs/0213-defaulted-type-params.html#type-parameters-with-defaults
@@ -73,7 +77,7 @@ impl From<Phonebook> for Vec<Person> {
         pb.0.into_values().collect::<Vec<Person>>()
     }
 }
-pub async fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
+pub fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
     // You can use this lib for locking https://docs.rs/fs2/latest/fs2/trait.FileExt.html
     // and this for ensuring everything got written https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all
     let wrt = File::options()
@@ -96,6 +100,15 @@ pub async fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
         .map_err(|err| Err::Io(err))
         .with_context(|| "Error on unlocking locking file")?;
     Ok(())
+}
+// 'static lifetime is fine here since our JsonFile handle and path will remain the same for the entirety of the program
+// however, TOOD: explore alternatives
+pub async fn async_write_json(p: &'static Path, j: Arc<Mutex<JsonFile>>) -> Result<()> {
+    let async_writer = tokio::task::spawn_blocking(move || {
+        let mut guard = j.lock().expect("Mutex should be unlocked before trying to lock again");
+        write_json(&*p, &mut *guard)
+    });
+    async_writer.await?
 }
 
 pub fn read_json(path: &Path) -> Result<JsonFile> {
@@ -123,6 +136,11 @@ pub fn read_json(path: &Path) -> Result<JsonFile> {
         .map_err(|err| Err::Json(err))
         .with_context(|| "json file parse error")
 }
+pub async fn async_read_json(path: &'static Path) -> Result<JsonFile> {
+    let async_reader = tokio::task::spawn_blocking(|| read_json(path));
+    async_reader.await?
+}
+
 #[allow(unused)]
 impl JsonFile {
     /// Delete an entry
@@ -172,7 +190,7 @@ impl JsonFile {
         // self.phonebook.iter().find(|p| p.id == id)
     }
 
-    pub fn get_by_name(&self, name : &str) -> Option<&Person> {
+    pub fn get_by_name(&self, name: &str) -> Option<&Person> {
         todo!()
     }
 
@@ -260,9 +278,8 @@ impl JsonFile {
     }
 }
 
-
-#[test]
-fn test_methods() -> Result<()> {
+#[tokio::test]
+async fn test_methods() -> Result<()> {
     let path = Path::new("files/mock.json");
     let mut json_file = read_json(&path)?;
 
@@ -278,7 +295,7 @@ fn test_methods() -> Result<()> {
     json_file.print_phonebook();
     println!("Writing JSON to {}", path.display());
     // Write updated phonebook to file :
-    write_json(&path, &mut json_file)?;
+    write_json(&path, &mut json_file).await?;
 
     debug_assert_eq!(None, json_file.get_by_id(10));
     Ok(())
