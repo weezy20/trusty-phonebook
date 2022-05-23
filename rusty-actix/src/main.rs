@@ -12,9 +12,17 @@ mod macros;
 mod into_actix_trait;
 use into_actix_trait::IntoActixResult;
 use lazy_static::lazy_static;
+use serde::Serialize;
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex, Once};
-
+macro_rules! lock_mutex {
+    () => {{
+        let mutex = Arc::clone(&APP_JSON_FILE);
+        mutex.lock().map_err::<actix_error::Error, _>(|_e| {
+            actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR).into()
+        })?
+    }};
+}
 // https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
 // Cannot call non-const fns in static/const context
 lazy_static! {
@@ -46,8 +54,14 @@ async fn main() -> std::io::Result<()> {
 #[actix_web::get("/book/{id}")]
 async fn get_by_id(req: HttpRequest, path: web::Path<phonebook::PersonID>) -> ActixResponse {
     let id = path.into_inner();
-
-    todo!()
+    let mut json_file = lock_mutex!();
+    let person = json_file.get_by_id(id);
+    Ok(match person {
+        Some(p) => HttpResponse::Ok()
+        .body(p.serialize(&serde_json::Serializer))
+        .content_type("application/json"),
+        None => HttpResponse::NotFound(),
+    })
 }
 
 // #[actix_web::get("/book/{name}")]
@@ -74,7 +88,7 @@ async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) ->
         log::warn!("{:?}", e);
         actix_error::ErrorInternalServerError(e)
     })?;
-    write_json(&PHONEBOOK_PATH, &mut json_file).actix_result()?;
+    write_json(&PHONEBOOK_PATH, &mut json_file).await.actix_result()?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -97,6 +111,7 @@ async fn get_phonebook_handler(_req: HttpRequest) -> ActixResponse {
 
 fn init() {
     APP_INIT.call_once(|| {
+        // TODO: Async read_json inside call_once || ?
         let json_file = read_json(&PHONEBOOK_PATH).expect("Failed to read {PHONEBOOK_PATH}. App initialization failed");
         let mut mutex = APP_JSON_FILE.lock().expect("Infallible");
         *mutex = json_file;

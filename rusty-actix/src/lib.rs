@@ -73,7 +73,7 @@ impl From<Phonebook> for Vec<Person> {
         pb.0.into_values().collect::<Vec<Person>>()
     }
 }
-pub fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
+pub async fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
     // You can use this lib for locking https://docs.rs/fs2/latest/fs2/trait.FileExt.html
     // and this for ensuring everything got written https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all
     let wrt = File::options()
@@ -162,7 +162,7 @@ impl JsonFile {
     }
     // TODO : Sort by key (id) and then perform a binary search for performance gains
     /// Fetch a person details by their id
-    pub fn get(&mut self, id: PersonID) -> Option<&Person> {
+    pub fn get_by_id(&mut self, id: PersonID) -> Option<&Person> {
         self.sort();
         match self.phonebook.binary_search_by_key(&id, |p| p.id).ok() {
             Some(index) => Some(&self.phonebook[index]),
@@ -188,7 +188,7 @@ impl JsonFile {
     /// Add to a phonebook only if that name is unique
     pub fn add_to_phonebook(&mut self, mut p: Person) -> Result<()> {
         // Handle bad requests such as an `id` not being in their default state 0_u128
-        if self.get(p.id).is_some() {
+        if self.get_by_id(p.id).is_some() {
             log::warn!("Person with id {} already exists in the phonebook", p.id);
             return Err(Err::PhonebookEntry("Person ID already exists".into()))
                 .with_context(|| format!("Person with id {} already exists, please do not provide an id", p.id));
@@ -280,6 +280,6 @@ fn test_methods() -> Result<()> {
     // Write updated phonebook to file :
     write_json(&path, &mut json_file)?;
 
-    debug_assert_eq!(None, json_file.get(10));
+    debug_assert_eq!(None, json_file.get_by_id(10));
     Ok(())
 }

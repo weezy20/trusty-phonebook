@@ -1,5 +1,4 @@
 {
-  "type": "module",
   "name": "backend",
   "version": "1.0.0",
   "description": "",
@@ -8,11 +7,12 @@
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev:js": "json-server -p 4000 --watch data.json",
-    "dev:server": "nodemon index.js"
+    "dev:notes": "nodemon index.js"
   },
   "author": "Abhishek",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.17.2"
   },
   "devDependencies": {
