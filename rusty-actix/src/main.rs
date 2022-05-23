@@ -4,26 +4,18 @@
 //! We take the dynamic json reader approach first i.e. no struct defining a schema, just Json JsonValue
 // use serde_json::Value as JsonValue;
 
-use ::phonebook::{read_json, write_json, JsonFile, Person};
+use ::phonebook::{read_json, JsonFile, Person};
 use actix_web::Result as ActixResult;
 use actix_web::{error as actix_error, http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer};
 use phonebook::async_write_json;
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
 mod into_actix_trait;
+use anyhow::anyhow;
 use into_actix_trait::IntoActixResult;
 use lazy_static::lazy_static;
-use serde::Serialize;
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex, Once};
-macro_rules! lock_mutex {
-    () => {{
-        let mutex = Arc::clone(&APP_JSON_FILE);
-        mutex.lock().map_err::<actix_error::Error, _>(|_e| {
-            actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR).into()
-        })?
-    }};
-}
 // https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
 // Cannot call non-const fns in static/const context
 lazy_static! {
@@ -43,9 +35,9 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .route("/book", web::get().to(get_phonebook_handler))
+            .route("/book/{id}", web::get().to(get_by_id))
             .route("/book", web::post().to(post_phonebook_handler))
         // .route("/book/{name}", web::get().to(get_by_name))
-        // .route("/book/{id}", web::get().to(get_by_id))
     })
     .listen(tcp)?
     .run()
@@ -53,17 +45,36 @@ async fn main() -> std::io::Result<()> {
 }
 
 // #[actix_web::get("/book/{id}")]
-// async fn get_by_id(req: HttpRequest, path: web::Path<phonebook::PersonID>) -> ActixResponse {
-//     let id = path.into_inner();
-//     let mut json_file = lock_mutex!();
-//     let person = json_file.get_by_id(id);
-//     Ok(match person {
-//         Some(p) => HttpResponse::Ok()
-//         .body(serde_json::to_string(p))
-//         .content_type("application/json"),
-//         None => HttpResponse::NotFound(),
-//     })
-// }
+async fn get_by_id(_req: HttpRequest, path: web::Path<u32>) -> ActixResponse {
+    let id = path.into_inner() as u128;
+    let person = tokio::task::spawn_blocking(move || -> Result<Option<Person>, anyhow::Error> {
+        let mutex = Arc::clone(&APP_JSON_FILE);
+        let mut json_file = mutex
+            .lock()
+            .map_err::<actix_error::Error, _>(|_e| {
+                actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR).into()
+            })
+            .map_err(|_| anyhow!("Mutex poisoned at function get_by_id"))?;
+        Ok(json_file.get_by_id(id))
+    })
+    .await
+    // First we work on the JoinError
+    .map_err(|_join_err| anyhow!("JoinError on get_by_id"))
+    .actix_result()?
+    // Then on the internal Mutex error
+    .map_err(|mutex_err| {
+        log::error!("mutex failed at get_by_id");
+        mutex_err
+    })
+    .actix_result()?;
+
+    if let Some(p) = person {
+        let payload = serde_json::to_string_pretty(&p)?;
+        Ok(HttpResponse::Ok().content_type("application/json").body(payload))
+    } else {
+        Ok(HttpResponse::NoContent().finish())
+    }
+}
 
 // #[actix_web::get("/book/{name}")]
 // async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResult<HttpResponse> {

@@ -180,12 +180,12 @@ impl JsonFile {
     }
     // TODO : Sort by key (id) and then perform a binary search for performance gains
     /// Fetch a person details by their id
-    pub fn get_by_id(&mut self, id: PersonID) -> Option<&Person> {
+    pub fn get_by_id(&mut self, id: PersonID) -> Option<Person> {
         self.sort();
         match self.phonebook.binary_search_by_key(&id, |p| p.id).ok() {
             Some(index) => Some(&self.phonebook[index]),
             None => None,
-        }
+        }.cloned()
 
         // self.phonebook.iter().find(|p| p.id == id)
     }
