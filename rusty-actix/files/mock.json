@@ -74,6 +74,11 @@
       "id": 17,
       "name": "Does a POST request affect get_by_id operation?",
       "number": "12313123"
+    },
+    {
+      "id": 18,
+      "name": "RwLocks are awesome",
+      "number": "12313123"
     }
   ]
 }

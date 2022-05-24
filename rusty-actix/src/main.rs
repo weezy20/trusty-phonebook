@@ -39,6 +39,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
+            .route("/book/{id}", web::delete().to(delete_id))
             .route("/{name}", web::get().to(get_by_name))
             .route("/book", web::post().to(post_phonebook_handler))
         // .route("/book/{name}", web::get().to(get_by_name))
@@ -49,8 +50,9 @@ async fn main() -> std::io::Result<()> {
 }
 
 // #[actix_web::get("/book/{id}")]
-async fn get_by_id(path: web::Path<u32>, _req: HttpRequest) -> ActixResponse {
-    let id = path.into_inner() as u128;
+async fn get_by_id(path: web::Path<u32>, req: HttpRequest) -> ActixResponse {
+    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    let id = path.into_inner() as ::phonebook::PersonID;
     let person = tokio::task::spawn_blocking(move || -> Result<Option<Person>, anyhow::Error> {
         let mutex = Arc::clone(&APP_JSON_FILE);
         let json_file = mutex
@@ -78,7 +80,8 @@ async fn get_by_id(path: web::Path<u32>, _req: HttpRequest) -> ActixResponse {
 }
 
 // #[actix_web::get("/book/{name}")]
-async fn get_by_name(_req: HttpRequest, path: web::Path<String>) -> ActixResponse {
+async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResponse {
+    println!("{} {:?} {}", req.method(), req.version(), req.uri());
     let name = path.into_inner();
     // If none found send a HTTP 204: Request was processed but no name was found
     let mutex = Arc::clone(&APP_JSON_FILE);
@@ -94,9 +97,10 @@ async fn get_by_name(_req: HttpRequest, path: web::Path<String>) -> ActixRespons
     })
 }
 
-async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) -> ActixResponse {
+async fn post_phonebook_handler(req: HttpRequest, person: web::Json<Person>) -> ActixResponse {
+    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    println!("POST {person:?}");
     let person = person.into_inner();
-    println!("POST recvd {person:?}");
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
     let mutex = Arc::clone(&APP_JSON_FILE);
     // Create a scope for mutex guard
@@ -133,6 +137,20 @@ async fn get_phonebook_handler(req: HttpRequest) -> ActixResponse {
 
     let payload = serde_json::to_string_pretty(&*json_file)?;
     Ok(HttpResponse::Ok().content_type("application/json").body(payload))
+}
+
+async fn delete_id(req: HttpRequest, id: web::Path<u32>) -> ActixResponse {
+    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    let id = id.into_inner() as ::phonebook::PersonID;
+    let json_file = Arc::clone(&APP_JSON_FILE);
+    // Infallible
+    json_file
+        .write()
+        .map_err(|_e| anyhow!("RwLock poisoned at function delete"))
+        .actix_result()?
+        .delete(id)
+        .expect("Infallible");
+    Ok(HttpResponse::NoContent().finish())
 }
 
 async fn index(_req: HttpRequest) -> HttpResponse {
