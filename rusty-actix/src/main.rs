@@ -5,6 +5,7 @@
 // use serde_json::Value as JsonValue;
 
 use ::phonebook::{read_json, JsonFile, Person};
+use actix_cors::Cors;
 use actix_web::Result as ActixResult;
 use actix_web::{error as actix_error, http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer};
 use phonebook::async_write_json;
@@ -22,6 +23,7 @@ lazy_static! {
     static ref PHONEBOOK_PATH: &'static std::path::Path = &std::path::Path::new("files/mock.json");
     static ref APP_JSON_FILE: Arc<Mutex<JsonFile>> = Arc::new(Mutex::new(JsonFile::default()));
 }
+static PORT: u16 = 80;
 static APP_INIT: Once = Once::new();
 
 pub(crate) type ActixResponse = ActixResult<HttpResponse>;
@@ -29,11 +31,12 @@ pub(crate) type ActixResponse = ActixResult<HttpResponse>;
 async fn main() -> std::io::Result<()> {
     init();
     env_logger::init();
-    let tcp = TcpListener::bind("127.0.0.1:80")?;
+    let tcp = TcpListener::bind(&format!("127.0.0.1:{PORT}"))?;
     let _port = tcp.local_addr()?.port();
-
     HttpServer::new(move || {
         App::new()
+            .wrap(Cors::default().allow_any_origin())
+            .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
             .route("/book", web::post().to(post_phonebook_handler))
@@ -51,10 +54,7 @@ async fn get_by_id(_req: HttpRequest, path: web::Path<u32>) -> ActixResponse {
         let mutex = Arc::clone(&APP_JSON_FILE);
         let mut json_file = mutex
             .lock()
-            .map_err::<actix_error::Error, _>(|_e| {
-                actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR).into()
-            })
-            .map_err(|_| anyhow!("Mutex poisoned at function get_by_id"))?;
+            .map_err(|_poison_err| anyhow!("Mutex poisoned at function get_by_id"))?;
         Ok(json_file.get_by_id(id))
     })
     .await
@@ -123,6 +123,10 @@ async fn get_phonebook_handler(_req: HttpRequest) -> ActixResponse {
 
     let payload = serde_json::to_string_pretty(&*json_file)?;
     Ok(HttpResponse::Ok().content_type("application/json").body(payload))
+}
+
+async fn index(_req: HttpRequest) -> HttpResponse {
+    HttpResponse::Ok().body("<h1>Rusty phonebook backend</h1>")
 }
 
 fn init() {
