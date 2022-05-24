@@ -131,7 +131,7 @@ async fn index(_req: HttpRequest) -> HttpResponse {
 
 fn init() {
     APP_INIT.call_once(|| {
-        // TODO: Async read_json inside call_once || ?
+        // TODO: Async read_json inside call_once || Not required since this is the app start anyway
         let json_file = read_json(&PHONEBOOK_PATH).expect("Failed to read {PHONEBOOK_PATH}. App initialization failed");
         let mut mutex = APP_JSON_FILE.write().expect("Infallible");
         mutex.sort();
