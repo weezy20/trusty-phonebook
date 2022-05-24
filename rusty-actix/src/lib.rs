@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::RwLock;
 #[macro_use]
 mod macros;
 // If interested in the gory details of anyhow::Result<T, E = anyhow::Error>
@@ -77,7 +77,8 @@ impl From<Phonebook> for Vec<Person> {
         pb.0.into_values().collect::<Vec<Person>>()
     }
 }
-pub fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
+/// Read a JsonFile and write it to a Path, while locking the file
+pub fn write_json(path: &Path, json_file: &JsonFile) -> Result<()> {
     // You can use this lib for locking https://docs.rs/fs2/latest/fs2/trait.FileExt.html
     // and this for ensuring everything got written https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all
     let wrt = File::options()
@@ -89,12 +90,12 @@ pub fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
     use fs2::FileExt;
     wrt.try_lock_exclusive()
         .map_err(|err| Err::Io(err))
-        .with_context(|| "Error on exclusively locking file")?;
+        .with_context(|| "Error on locking file")?;
     // https://stackoverflow.com/questions/57232515/why-does-serde-jsonto-writer-not-require-its-argument-to-be-mut
     // https://doc.rust-lang.org/std/io/trait.Write.html#implementors
     // io::Write takes a &mut &File here
     // the mutablilty of a binding and the mutability of the bound value are not necessarily the same.
-    json_file.sort();
+    // json_file.sort();
     serde_json::to_writer_pretty(&wrt, &json_file)?;
     wrt.unlock()
         .map_err(|err| Err::Io(err))
@@ -103,10 +104,10 @@ pub fn write_json(path: &Path, json_file: &mut JsonFile) -> Result<()> {
 }
 // 'static lifetime is fine here since our JsonFile handle and path will remain the same for the entirety of the program
 // however, TOOD: explore alternatives
-pub async fn async_write_json(p: &'static Path, j: Arc<Mutex<JsonFile>>) -> Result<()> {
+pub async fn async_write_json(p: &'static Path, j: Arc<RwLock<JsonFile>>) -> Result<()> {
     let async_writer = tokio::task::spawn_blocking(move || {
-        let mut guard = j.lock().expect("Mutex should be unlocked before trying to lock again");
-        write_json(&*p, &mut *guard)
+        let guard = j.read().expect("Mutex should be unlocked before trying to lock again");
+        write_json(&*p, &*guard)
     });
     async_writer.await?
 }
@@ -180,14 +181,27 @@ impl JsonFile {
     }
     // TODO : Sort by key (id) and then perform a binary search for performance gains
     /// Fetch a person details by their id
-    pub fn get_by_id(&mut self, id: PersonID) -> Option<Person> {
+    pub fn get_by_id_sorted(&mut self, id: PersonID) -> Option<Person> {
         self.sort();
         match self.phonebook.binary_search_by_key(&id, |p| p.id).ok() {
-            Some(index) => Some(&self.phonebook[index]),
+            Some(index) => Some(&self.phonebook[index]).cloned(),
             None => None,
-        }.cloned()
+        }
 
         // self.phonebook.iter().find(|p| p.id == id)
+    }
+    /// get_by_id using binary search but without taking a &mut access to JsonFile
+    /// We can perform a binary search because the only way our phonebook
+    /// is unsorted is during either initialization or during manually tweaking of the file
+    /// after it has been created and populated. The `generate_id` function ensures that
+    /// ids are unique and they are created in a linear sequence so as to preserve sort order
+    /// Not having a `&mut` reference means that our `RwLock` doesn't require to get a `RwWrtierGuard`
+    /// on our `RwLock` which is good for performance.  
+    pub fn get_by_id(&self, id: PersonID) -> Option<Person> {
+        if let Some(index) = self.phonebook.binary_search_by_key(&id, |p| p.id).ok() {
+            return Some(&self.phonebook[index]).cloned();
+        }
+        None
     }
 
     pub fn get_by_name(&self, name: &str) -> Option<&Person> {
@@ -295,7 +309,7 @@ async fn test_methods() -> Result<()> {
     json_file.print_phonebook();
     println!("Writing JSON to {}", path.display());
     // Write updated phonebook to file :
-    write_json(&path, &mut json_file).await?;
+    write_json(&path, &json_file)?;
 
     debug_assert_eq!(None, json_file.get_by_id(10));
     Ok(())
