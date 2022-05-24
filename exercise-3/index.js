@@ -89,7 +89,7 @@ app.post("/api/persons", (req, res) => {
   if (checkNameAlreadyExists(personInfo.name))
     return res
       .status(400)
-      .json({ error: "Name must be unique! (I know this is stupid but)" });
+      .json({ error: "Name must be unique!" });
 
   // console.log(personInfo);
   const personId = generatePersonId();

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
@@ -197,6 +198,8 @@ impl JsonFile {
     /// ids are unique and they are created in a linear sequence so as to preserve sort order
     /// Not having a `&mut` reference means that our `RwLock` doesn't require to get a `RwWrtierGuard`
     /// on our `RwLock` which is good for performance.  
+    ///
+    /// Note: Our JsonFile, in memory is always sorted.
     pub fn get_by_id(&self, id: PersonID) -> Option<Person> {
         if let Some(index) = self.phonebook.binary_search_by_key(&id, |p| p.id).ok() {
             return Some(&self.phonebook[index]).cloned();
@@ -204,8 +207,11 @@ impl JsonFile {
         None
     }
 
-    pub fn get_by_name(&self, name: &str) -> Option<&Person> {
-        todo!()
+    pub fn get_by_name(&self, name: &str) -> Option<Person> {
+        // Throwaway the error
+        let (p, index) = self.check_if_name_exists(name).ok()?;
+        if !p {return None;}
+        self.phonebook.get(index.unwrap()).cloned()
     }
 
     pub fn print_phonebook(&self) {
@@ -227,7 +233,7 @@ impl JsonFile {
         }
         let id = self.generate_id();
         p.id = id;
-        if !self.check_if_name_exists(&p.name)? {
+        if !self.check_if_name_exists(&p.name)?.0 {
             self.phonebook.push(p);
         } else {
             log::warn!("Name {} already exists in the phonebook. Names must be unique", &p.name);
@@ -263,7 +269,7 @@ impl JsonFile {
         candidate
     }
 
-    fn check_if_name_exists(&self, new_name: &str) -> Result<bool> {
+    fn check_if_name_exists(&self, new_name: &str) -> Result<(bool, Option<usize>)> {
         let new_name = new_name.trim().to_lowercase();
         let mut new_name = new_name.split_whitespace();
         // Important to get length before calling any `next`|`next_back`
@@ -271,24 +277,30 @@ impl JsonFile {
         let (new_fname, new_lname) = (
             new_name
                 .next()
-                .ok_or(Err::PhonebookEntry("First name missing".into()))
-                .with_context(|| "Phonebook entry should have a first name")?,
+                // previously ok_or which is a const fn
+                .ok_or_else(|| Err::PhonebookEntry("First name missing".into()))
+                .with_context(|| {
+                    let err = "Phonebook entry should have a first name";
+                    log::warn!("{err}");
+                    err
+                })?,
             new_name.next_back(),
         );
         // We take the size_hint before calling `next` and `next_back` on new_name and name
         // exactly once
-        Ok(self
+        let pos = self
             .phonebook
             .iter()
             .map(|person| person.name.trim().to_lowercase())
-            .any(|pname| {
+            .position(|pname| {
                 let mut name = pname.split_whitespace();
                 let name_len = name.size_hint();
                 // compare upper bounds
                 name_len.1 == new_name_len.1
                     && name.next().expect("Safe to unwrap pre-existing fname") == new_fname
                     && matches!(name.next_back(), Some(lname) if matches!(new_lname, Some(n) if n == lname))
-            }))
+            });
+        Ok((pos.is_some(), pos))
     }
 }
 

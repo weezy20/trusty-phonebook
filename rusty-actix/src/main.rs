@@ -39,6 +39,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
+            .route("/{name}", web::get().to(get_by_name))
             .route("/book", web::post().to(post_phonebook_handler))
         // .route("/book/{name}", web::get().to(get_by_name))
     })
@@ -77,12 +78,21 @@ async fn get_by_id(path: web::Path<u32>, _req: HttpRequest) -> ActixResponse {
 }
 
 // #[actix_web::get("/book/{name}")]
-// async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResult<HttpResponse> {
-//     let name = path.into_inner();
-//     // If none found send a HTTP 204: Request was processed but no name was found
-//     let result = ::phonebook::JsonFile::get_by_name(&APP_JSON_FILE, &name).unwrap_or(default)
-//     todo!()
-// }
+async fn get_by_name(_req: HttpRequest, path: web::Path<String>) -> ActixResponse {
+    let name = path.into_inner();
+    // If none found send a HTTP 204: Request was processed but no name was found
+    let mutex = Arc::clone(&APP_JSON_FILE);
+    let json_file = mutex
+        .read()
+        .map_err(|_e| anyhow!("RwLock poisoned at function get_by_name"))
+        .actix_result()?;
+    Ok(if let Some(person) = json_file.get_by_name(&name) {
+        let payload = serde_json::to_string_pretty(&person)?;
+        HttpResponse::Ok().content_type("application/json").body(payload)
+    } else {
+        HttpResponse::NoContent().finish()
+    })
+}
 
 async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) -> ActixResponse {
     let person = person.into_inner();
@@ -108,8 +118,8 @@ async fn post_phonebook_handler(_req: HttpRequest, person: web::Json<Person>) ->
     Ok(HttpResponse::Ok().finish())
 }
 
-async fn get_phonebook_handler(_req: HttpRequest) -> ActixResponse {
-    println!("GET recvd");
+async fn get_phonebook_handler(req: HttpRequest) -> ActixResponse {
+    println!("{} {:?} {}", req.method(), req.version(), req.uri());
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
     let json_file = APP_JSON_FILE
         .read()
