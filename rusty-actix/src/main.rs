@@ -31,6 +31,7 @@ pub(crate) type ActixResponse = ActixResult<HttpResponse>;
 async fn main() -> std::io::Result<()> {
     init();
     env_logger::init();
+    println!("Started on port {PORT}");
     let tcp = TcpListener::bind(&format!("127.0.0.1:{PORT}"))?;
     let _port = tcp.local_addr()?.port();
     HttpServer::new(move || {

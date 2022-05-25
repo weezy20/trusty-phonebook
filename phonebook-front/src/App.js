@@ -1,25 +1,31 @@
-import logo from './logo.svg';
-import './App.css';
+import React from "react";
+// import ReactDOM from 'react-dom'
+import { useEffect, useState } from "react";
+import axios from "axios";
+const base_url = "http://localhost";
 
-function App() {
+export default function App() {
+  const [book, setBook] = useState([]);
+  console.log(`Connecting to ${base_url}`);
+  axios.get(`${base_url}/book`).then((response) => {
+    setBook(response.data.phonebook);
+    console.log(book);
+  });
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div>
+      <h1>Phonebook#69</h1>
+      <ul>
+        {book.map((each) => (<PhonebookEntry entry={each} />))}
+      </ul>
     </div>
   );
 }
 
-export default App;
+const PhonebookEntry = ( props ) => {
+  return (
+    <li key={props.entry.id}>
+      Name : {props.entry.name} Number : {props.entry.number}
+    </li>
+  );
+};
