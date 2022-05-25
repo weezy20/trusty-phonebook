@@ -32,6 +32,7 @@ async fn main() -> std::io::Result<()> {
     init();
     env_logger::init();
     println!("Started on port {PORT}");
+    // TODO : Select PORT from environment or start using port 80
     let tcp = TcpListener::bind(&format!("127.0.0.1:{PORT}"))?;
     let _port = tcp.local_addr()?.port();
     HttpServer::new(move || {
@@ -52,7 +53,7 @@ async fn main() -> std::io::Result<()> {
 
 // #[actix_web::get("/book/{id}")]
 async fn get_by_id(path: web::Path<u32>, req: HttpRequest) -> ActixResponse {
-    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     let id = path.into_inner() as ::phonebook::PersonID;
     let person = tokio::task::spawn_blocking(move || -> Result<Option<Person>, anyhow::Error> {
         let mutex = Arc::clone(&APP_JSON_FILE);
@@ -82,7 +83,7 @@ async fn get_by_id(path: web::Path<u32>, req: HttpRequest) -> ActixResponse {
 
 // #[actix_web::get("/book/{name}")]
 async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResponse {
-    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     let name = path.into_inner();
     // If none found send a HTTP 204: Request was processed but no name was found
     let mutex = Arc::clone(&APP_JSON_FILE);
@@ -99,7 +100,7 @@ async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResponse
 }
 
 async fn post_phonebook_handler(req: HttpRequest, person: web::Json<Person>) -> ActixResponse {
-    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     println!("POST {person:?}");
     let person = person.into_inner();
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
@@ -124,7 +125,7 @@ async fn post_phonebook_handler(req: HttpRequest, person: web::Json<Person>) -> 
 }
 
 async fn get_phonebook_handler(req: HttpRequest) -> ActixResponse {
-    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
     let json_file = APP_JSON_FILE
         .read()
