@@ -150,6 +150,10 @@ async fn delete_id(req: HttpRequest, id: web::Path<u32>) -> ActixResponse {
         .actix_result()?
         .delete(id)
         .expect("Infallible");
+
+    async_write_json(&PHONEBOOK_PATH, json_file)
+        .await
+        .actix_result()?;
     Ok(HttpResponse::NoContent().finish())
 }
 
