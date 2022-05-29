@@ -3,8 +3,11 @@ import React from "react";
 import { useEffect, useState } from "react";
 import axios from "axios";
 const base_url = "http://localhost";
+// TODO: Reject duplicate names from being added, this can be done if the server returns an error
 
 export default function App() {
+  // Hook for search bar
+  const [searchName, setSearchName] = useState("");
   // Tracks the global phonebook state
   const [book, setBook] = useState([]);
   // Controlled component for our form element
@@ -20,7 +23,7 @@ export default function App() {
   console.log(book);
   const PhonebookEntry = ({ entry }) => {
     return (
-      <li key={entry.id.toString()}>
+      <li key="{entry.id}">
         Name : {entry.name} Number : {entry.number}
       </li>
     );
@@ -35,26 +38,43 @@ export default function App() {
     setBook(book.concat(newEntry));
   };
 
+  const findName = (e) => {
+    let field = e.target.value;
+    setSearchName(field);
+    // console.log("Search name: ", searchName);
+  };
+
   const onNameChange = (e) => {
     // e.target corresponds to the controlled <input> element
-    console.log("Name changing: ", e.target.value);
     setEntry({ ...newEntry, name: e.target.value });
   };
 
   const onNumChange = (e) => {
     // e.target corresponds to the controlled <input> element
-    console.log("Number changing: ", e.target.value);
     setEntry({ ...newEntry, number: e.target.value });
   };
   return (
     <div>
       <h1>Phonebook#69</h1>
+      <label htmlFor="searchName">
+        Search phonebook:
+        <input
+          id="searchName"
+          type="text"
+          value={searchName}
+          onChange={findName}
+        />
+      </label>
       <ul>
         {/* Rendering a collection map() returns an array */}
         {/* key attribute added for outer elem PhonebookEntry in order to shut up react unique key props */}
-        {book.map((each) => (
-          <PhonebookEntry key = {each.id} entry={each} />
-        ))}
+        {searchName === ""
+          ? book.map((each) => <PhonebookEntry key={each.id} entry={each} />)
+          : book
+              .filter((each) =>
+                each.name.toLowerCase().startsWith(searchName.toLowerCase())
+              )
+              .map((each) => <PhonebookEntry key={each.id} entry={each} />)}
       </ul>
       <form onSubmit={addPhonebookEntry}>
         <label htmlFor="name ">
