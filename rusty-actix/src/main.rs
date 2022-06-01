@@ -15,8 +15,9 @@ mod into_actix_trait;
 use anyhow::anyhow;
 use into_actix_trait::IntoActixResult;
 use lazy_static::lazy_static;
+use parking_lot::RwLock;
 use std::net::TcpListener;
-use std::sync::{Arc, Once, RwLock};
+use std::sync::{Arc, Once};
 // https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
 // Cannot call non-const fns in static/const context
 lazy_static! {
@@ -57,9 +58,7 @@ async fn get_by_id(path: web::Path<u32>, req: HttpRequest) -> ActixResponse {
     let id = path.into_inner() as ::phonebook::PersonID;
     let person = tokio::task::spawn_blocking(move || -> Result<Option<Person>, anyhow::Error> {
         let mutex = Arc::clone(&APP_JSON_FILE);
-        let json_file = mutex
-            .read()
-            .map_err(|_poison_err| anyhow!("RwLock poisoned at function get_by_id"))?;
+        let json_file = mutex.read();
         Ok(json_file.get_by_id(id))
     })
     .await
@@ -67,10 +66,10 @@ async fn get_by_id(path: web::Path<u32>, req: HttpRequest) -> ActixResponse {
     .map_err(|_join_err| anyhow!("JoinError on get_by_id"))
     .actix_result()?
     // Then on the internal Mutex error
-    .map_err(|mutex_err| {
-        log::error!("mutex failed at get_by_id");
-        mutex_err
-    })
+    // .map_err(|mutex_err| {
+    //     log::error!("mutex failed at get_by_id");
+    //     mutex_err
+    // })
     .actix_result()?;
 
     if let Some(p) = person {
@@ -87,10 +86,9 @@ async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResponse
     let name = path.into_inner();
     // If none found send a HTTP 204: Request was processed but no name was found
     let mutex = Arc::clone(&APP_JSON_FILE);
-    let json_file = mutex
-        .read()
-        .map_err(|_e| anyhow!("RwLock poisoned at function get_by_name"))
-        .actix_result()?;
+    let json_file = mutex.read();
+    // .map_err(|_e| anyhow!("RwLock poisoned at function get_by_name"))
+    // .actix_result()?;
     Ok(if let Some(person) = json_file.get_by_name(&name) {
         let payload = serde_json::to_string_pretty(&person)?;
         HttpResponse::Ok().content_type("application/json").body(payload)
@@ -108,10 +106,7 @@ async fn post_phonebook_handler(req: HttpRequest, person: web::Json<Person>) -> 
     // Create a scope for mutex guard
     // If the Mutex was "poisoned" we should just `expect` on it since the poison happened on some other thread
     // that we don't control. Should return internal server error
-    let mut json_file = mutex.write().map_err::<actix_error::Error, _>(|_e| {
-        actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR).into()
-    })?;
-
+    let mut json_file = mutex.write();
     json_file.add_to_phonebook(person).map_err(|e| {
         log::warn!("{:?}", e);
         actix_error::ErrorInternalServerError(e)
@@ -127,9 +122,7 @@ async fn post_phonebook_handler(req: HttpRequest, person: web::Json<Person>) -> 
 async fn get_phonebook_handler(req: HttpRequest) -> ActixResponse {
     log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
-    let json_file = APP_JSON_FILE
-        .read()
-        .map_err(|_e| actix_error::InternalError::new("Something went wrong", StatusCode::INTERNAL_SERVER_ERROR))?;
+    let json_file = APP_JSON_FILE.read();
 
     // Problem serde_json::error::Result<T> is returned here and must be converted to
     // anyhow::Result<T> before actix_result() will work
@@ -146,16 +139,9 @@ async fn delete_id(req: HttpRequest, id: web::Path<u32>) -> ActixResponse {
     let id = id.into_inner() as ::phonebook::PersonID;
     let json_file = Arc::clone(&APP_JSON_FILE);
     // Infallible
-    json_file
-        .write()
-        .map_err(|_e| anyhow!("RwLock poisoned at function delete"))
-        .actix_result()?
-        .delete(id)
-        .expect("Infallible");
+    json_file.write().delete(id).expect("Infallible");
 
-    async_write_json(&PHONEBOOK_PATH, json_file)
-        .await
-        .actix_result()?;
+    async_write_json(&PHONEBOOK_PATH, json_file).await.actix_result()?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -167,7 +153,7 @@ fn init() {
     APP_INIT.call_once(|| {
         // TODO: Async read_json inside call_once || Not required since this is the app start anyway
         let json_file = read_json(&PHONEBOOK_PATH).expect("Failed to read {PHONEBOOK_PATH}. App initialization failed");
-        let mut mutex = APP_JSON_FILE.write().expect("Infallible");
+        let mut mutex = APP_JSON_FILE.write(); //.expect("Infallible");
         mutex.sort();
         *mutex = json_file;
     })

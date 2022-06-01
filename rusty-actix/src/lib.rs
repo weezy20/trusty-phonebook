@@ -6,7 +6,8 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::RwLock;
+// use std::sync::RwLock;
+use parking_lot::RwLock;
 #[macro_use]
 mod macros;
 // If interested in the gory details of anyhow::Result<T, E = anyhow::Error>
@@ -106,7 +107,7 @@ pub fn write_json(path: &Path, json_file: &JsonFile) -> Result<()> {
 // however, TOOD: explore alternatives
 pub async fn async_write_json(p: &'static Path, j: Arc<RwLock<JsonFile>>) -> Result<()> {
     let async_writer = tokio::task::spawn_blocking(move || {
-        let guard = j.read().expect("Mutex should be unlocked before trying to lock again");
+        let guard = j.read(); // .expect("Mutex should be unlocked before trying to lock again");
         write_json(&*p, &*guard)
     });
     async_writer.await?
