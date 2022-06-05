@@ -40,17 +40,43 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // Cors::permissive is not recommended for production environments 
             .wrap(Cors::permissive())
+            // Get
             .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
-            .route("/book/{id}", web::delete().to(delete_id))
             .route("/{name}", web::get().to(get_by_name))
+            // Delete
+            .route("/book/{id}", web::delete().to(delete_id))
+            // Post
             .route("/book", web::post().to(post_phonebook_handler))
+            // Put
+            // we can use "/book" and perform the checking of ids in rust or we can do better
+            // and make a put "/book/id", which let's us surgically update a complete record, be it name or number
+            .route("/book/{id}", web::put().to(put_update))
             // .route("/book/{name}", web::get().to(get_by_name))
     })
     .listen(tcp)?
     .run()
     .await
+}
+
+async fn put_update(path: web::Path<u32>, person: web::Json<Person>, req: HttpRequest) -> ActixResponse {
+    log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
+    let id = path.into_inner() as ::phonebook::PersonID;
+    println!("PUT {person:?}");
+    let person = person.into_inner();
+    let mutex = Arc::clone(&APP_JSON_FILE);
+    let mut json_file = mutex.write();
+    json_file.update(id, person).map_err(|e| {
+        log::warn!("{:?}", e);
+        actix_error::ErrorInternalServerError(e)
+    })?;
+    drop(json_file);
+    // Mutex needs to be unlocked else async_write_json will fail and wait indefinitely
+    async_write_json(&PHONEBOOK_PATH, Arc::clone(&mutex))
+        .await
+        .actix_result()?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 // #[actix_web::get("/book/{id}")]

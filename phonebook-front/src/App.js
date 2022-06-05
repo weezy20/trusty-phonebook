@@ -27,15 +27,13 @@ export default function App() {
         onClick={(_e) => {
           if (
             window.confirm(
-              "Do you really want to delete " +
-              entry.name +
-              " from phonebook?"
+              "Do you really want to delete " + entry.name + " from phonebook?"
             )
           ) {
             axios.delete(`${base_url}/book/${entry.id}`).then((response) => {
               if (response.status === 204) {
                 console.log(`${entry.name} deleted from Phonebook`);
-                setBook(book.filter(live => live.id !== entry.id))
+                setBook(book.filter((live) => live.id !== entry.id));
               }
             });
           }
@@ -60,6 +58,28 @@ export default function App() {
     event.preventDefault();
     // event.target is the <Form /> we have defined the button submit on
     // console.log("add phonebook entry button clicked", event.target);
+    // Check if duplicate name exists
+    let duplicate_id = -1;
+    if (
+      book.find((person) => {
+        if (person.name === newEntry.name) {
+          duplicate_id = person.id;
+          return true;
+        } else {
+          return false;
+        }
+      })
+    ) {
+      let confirm = window.confirm(
+        `${newEntry.name} already exists in Phonebook, do you want to update their number?`
+      );
+      if (confirm && duplicate_id !== -1) {
+        axios
+          // This will cause a BAD_REQUEST response from server because we are already checking for name duplicates
+          .put(`${base_url}/book/${duplicate_id}`, newEntry)
+          .then((response) => console.log(`${duplicate_id} updated to `, newEntry));
+      }
+    }
     axios.post(`${base_url}/book`, newEntry).then((response) => {
       axios.get(`${base_url}/book`).then((response) => {
         // Set from GET request rather than just concating becz we depend on the server to issue a id

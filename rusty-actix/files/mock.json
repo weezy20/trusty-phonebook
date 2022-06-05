@@ -2,8 +2,8 @@
   "phonebook": [
     {
       "id": 1,
-      "name": "Cassandra Fox",
-      "number": "099-887766"
+      "name": "Maria Fox",
+      "number": "012-40000"
     },
     {
       "id": 2,
@@ -54,51 +54,8 @@
       "id": 20,
       "name": "Dominos Pizza",
       "number": "very delicious pizza"
-    },
-    {
-      "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
     }
   ]
-}    "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
-    }
-  ]
-}zza"
-    },
-    {
-      "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
-    }
-  ]
-}   {
-      "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
-    }
-  ]
-}     "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
-    }
-  ]
-}      "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
-    }
-  ]
-}      "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
-    }
-  ]
+}]
 }
-      "id": 21,
-      "name": "Richard Feynman",
-      "number": "169"
-    }
-  ]
 }
