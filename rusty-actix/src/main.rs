@@ -7,7 +7,7 @@
 use ::phonebook::{read_json, JsonFile, Person};
 use actix_cors::Cors;
 use actix_web::Result as ActixResult;
-use actix_web::{error as actix_error, http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{error as actix_error, web, App, HttpRequest, HttpResponse, HttpServer};
 use phonebook::async_write_json;
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
@@ -38,14 +38,15 @@ async fn main() -> std::io::Result<()> {
     let _port = tcp.local_addr()?.port();
     HttpServer::new(move || {
         App::new()
-            .wrap(Cors::default().allow_any_origin())
+            // Cors::permissive is not recommended for production environments 
+            .wrap(Cors::permissive())
             .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
             .route("/book/{id}", web::delete().to(delete_id))
             .route("/{name}", web::get().to(get_by_name))
             .route("/book", web::post().to(post_phonebook_handler))
-        // .route("/book/{name}", web::get().to(get_by_name))
+            // .route("/book/{name}", web::get().to(get_by_name))
     })
     .listen(tcp)?
     .run()

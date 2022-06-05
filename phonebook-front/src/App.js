@@ -22,8 +22,11 @@ export default function App() {
   }, []);
   console.log(book);
   const PhonebookEntry = ({ entry }) => {
+    // Warning here: When adding a new name via the react app (not downloaded from server), we don't se the id field
+    // as a result those entries added by the react app will have an undefined {entry.id}. To fix this we post to the 
+    // server in addPhonebookEntry first and then fetch results from the server before rendering
     return (
-      <li key="{entry.id}">
+      <li key={entry.id}>
         Name : {entry.name} Number : {entry.number}
       </li>
     );
@@ -35,7 +38,12 @@ export default function App() {
     event.preventDefault();
     // event.target is the <Form /> we have defined the button submit on
     // console.log("add phonebook entry button clicked", event.target);
-    setBook(book.concat(newEntry));
+    axios.post(`${base_url}/book`, newEntry).then((response) => {
+      axios.get(`${base_url}/book`).then(response => {
+        // Set from GET request rather than just concating becz we depend on the server to issue a id
+        setBook(response.data.phonebook)
+      })
+    })
   };
 
   const findName = (e) => {
