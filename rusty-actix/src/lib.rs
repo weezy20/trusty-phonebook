@@ -84,11 +84,18 @@ pub fn write_json(path: &Path, json_file: &JsonFile) -> Result<()> {
     // and this for ensuring everything got written https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all
     let wrt = File::options()
         .write(true)
+        // Truncate will delete the file if it exists which may not be optimal 
+        // We can instead write to a temporary file, then flush the temporary file
+        // to the original file path
+        // In our case, since the file contents live in program memory, it makes 
+        // no difference to the end user.
         .truncate(true) 
         .open(path)
         .map_err(|err| Err::Io(err))
         .with_context(|| format!("Writing json failed at `{}`", path.display()))?;
     // This library provides whole-file locks in both shared (read) and exclusive (read-write) varieties.
+    // Uncomment this line to see the file being deleted in the interim
+    // std::thread::sleep(std::time::Duration::from_secs(40));
     use fs2::FileExt;
     wrt.try_lock_exclusive()
         .map_err(|err| Err::Io(err))
