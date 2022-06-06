@@ -8,7 +8,7 @@ use ::phonebook::{read_json, JsonFile, Person};
 use actix_cors::Cors;
 use actix_web::Result as ActixResult;
 use actix_web::{error as actix_error, web, App, HttpRequest, HttpResponse, HttpServer};
-use phonebook::async_write_json;
+use phonebook::{async_write_json, async_read_json};
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
 mod into_actix_trait;
@@ -111,7 +111,7 @@ async fn get_by_id(path: web::Path<u32>, req: HttpRequest) -> ActixResponse {
 async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResponse {
     log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     let name = path.into_inner();
-    // If none found send a HTTP 204: Request was processed but no name was found
+    // If none found send a HTTP 204: Request was processed but no name was foun d
     let mutex = Arc::clone(&APP_JSON_FILE);
     let json_file = mutex.read();
     // .map_err(|_e| anyhow!("RwLock poisoned at function get_by_name"))
@@ -167,8 +167,8 @@ async fn delete_id(req: HttpRequest, id: web::Path<u32>) -> ActixResponse {
     let json_file = Arc::clone(&APP_JSON_FILE);
     // Infallible
     json_file.write().delete(id).expect("Infallible");
+    async_write_json(&PHONEBOOK_PATH, json_file.clone()).await.actix_result()?;
 
-    async_write_json(&PHONEBOOK_PATH, json_file).await.actix_result()?;
     Ok(HttpResponse::NoContent().finish())
 }
 

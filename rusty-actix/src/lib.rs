@@ -84,6 +84,7 @@ pub fn write_json(path: &Path, json_file: &JsonFile) -> Result<()> {
     // and this for ensuring everything got written https://doc.rust-lang.org/std/io/trait.Write.html#method.write_all
     let wrt = File::options()
         .write(true)
+        .truncate(true) 
         .open(path)
         .map_err(|err| Err::Io(err))
         .with_context(|| format!("Writing json failed at `{}`", path.display()))?;

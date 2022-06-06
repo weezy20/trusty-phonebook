@@ -47,7 +47,7 @@ export default function App() {
     // server in addPhonebookEntry first and then fetch results from the server before rendering
     return (
       <li key={entry.id}>
-        Name : {entry.name} Number : {entry.number} <DeleteButton />
+        Name : {entry.name}<br/>Number : {entry.number} <DeleteButton />
       </li>
     );
   };

@@ -1,11 +1,6 @@
 {
   "phonebook": [
     {
-      "id": 1,
-      "name": "Maria Fox",
-      "number": "012-40000"
-    },
-    {
       "id": 2,
       "name": "Ada Lovelace",
       "number": "39-44-5323523"
@@ -26,24 +21,9 @@
       "number": "890123890"
     },
     {
-      "id": 10,
-      "name": "Crazy Lane",
-      "number": "12222"
-    },
-    {
       "id": 12,
       "name": "Rusty Lane",
       "number": "12222"
-    },
-    {
-      "id": 17,
-      "name": "Does a POST request affect get_by_id operation?",
-      "number": "12313123"
-    },
-    {
-      "id": 18,
-      "name": "RwLocks are awesome",
-      "number": "12313123"
     },
     {
       "id": 19,
@@ -52,10 +32,18 @@
     },
     {
       "id": 20,
-      "name": "Dominos Pizza",
-      "number": "very delicious pizza"
+      "name": "Marry Popendick",
+      "number": "121-990088233"
+    },
+    {
+      "id": 21,
+      "name": "Mara Bos",
+      "number": "Rust Atomics"
+    },
+    {
+      "id": 22,
+      "name": "Abhishek Shah",
+      "number": "1122-3392948673"
     }
   ]
-}]
-}
 }
