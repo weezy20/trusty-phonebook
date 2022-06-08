@@ -89,6 +89,8 @@ pub fn write_json(path: &Path, json_file: &JsonFile) -> Result<()> {
         // to the original file path
         // In our case, since the file contents live in program memory, it makes 
         // no difference to the end user.
+        // Truncation is especially helpful when delete is invoked, as post requests 
+        // always add data and therefore don't need truncation
         .truncate(true) 
         .open(path)
         .map_err(|err| Err::Io(err))
@@ -123,6 +125,7 @@ pub async fn async_write_json(p: &'static Path, j: Arc<RwLock<JsonFile>>) -> Res
 
 pub fn read_json(path: &Path) -> Result<JsonFile> {
     let rdr = File::options()
+        // TODO: Check if write access is required 
         .write(true)
         .read(true)
         .open(path)
@@ -259,6 +262,8 @@ impl JsonFile {
         log::info!("Phonebook sorted by id");
     }
 
+    // TODO: Currently we do not assign missing ids i.e. ids that were deleted do not 
+    // get assinged to newly added entries. Let's fix this
     fn generate_id(&self) -> PersonID {
         let max_phonebook_id = self
             .phonebook

@@ -8,7 +8,8 @@ use ::phonebook::{read_json, JsonFile, Person};
 use actix_cors::Cors;
 use actix_web::Result as ActixResult;
 use actix_web::{error as actix_error, web, App, HttpRequest, HttpResponse, HttpServer};
-use phonebook::{async_write_json, async_read_json};
+#[allow(unused)]
+use phonebook::{async_read_json, async_write_json};
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
 mod into_actix_trait;
@@ -23,8 +24,12 @@ use std::sync::{Arc, Once};
 lazy_static! {
     static ref PHONEBOOK_PATH: &'static std::path::Path = &std::path::Path::new("files/mock.json");
     static ref APP_JSON_FILE: Arc<RwLock<JsonFile>> = Arc::new(RwLock::new(JsonFile::default()));
+    // Done : Select PORT from environment or start using port 80
+    static ref PORT: u16 = std::env::var("PORT")
+        .unwrap_or_else(|_| "80".into())
+        .parse::<u16>()
+        .expect("Invalid Port number");
 }
-static PORT: u16 = 80;
 static APP_INIT: Once = Once::new();
 
 pub(crate) type ActixResponse = ActixResult<HttpResponse>;
@@ -32,13 +37,12 @@ pub(crate) type ActixResponse = ActixResult<HttpResponse>;
 async fn main() -> std::io::Result<()> {
     init();
     env_logger::init();
-    println!("Started on port {PORT}");
-    // TODO : Select PORT from environment or start using port 80
-    let tcp = TcpListener::bind(&format!("127.0.0.1:{PORT}"))?;
+    println!("Started on port {}", *PORT);
+    let tcp = TcpListener::bind(&format!("0.0.0.0:{}", *PORT))?;
     let _port = tcp.local_addr()?.port();
     HttpServer::new(move || {
         App::new()
-            // Cors::permissive is not recommended for production environments 
+            // Cors::permissive is not recommended for production environments
             .wrap(Cors::permissive())
             // Get
             .route("/", web::get().to(index))
@@ -53,7 +57,7 @@ async fn main() -> std::io::Result<()> {
             // we can use "/book" and perform the checking of ids in rust or we can do better
             // and make a put "/book/id", which let's us surgically update a complete record, be it name or number
             .route("/book/{id}", web::put().to(put_update))
-            // .route("/book/{name}", web::get().to(get_by_name))
+        // .route("/book/{name}", web::get().to(get_by_name))
     })
     .listen(tcp)?
     .run()
@@ -63,7 +67,7 @@ async fn main() -> std::io::Result<()> {
 async fn put_update(path: web::Path<u32>, person: web::Json<Person>, req: HttpRequest) -> ActixResponse {
     log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     let id = path.into_inner() as ::phonebook::PersonID;
-    println!("PUT {person:?}");
+    log::info!("PUT {person:?}");
     let person = person.into_inner();
     let mutex = Arc::clone(&APP_JSON_FILE);
     let mut json_file = mutex.write();
@@ -126,7 +130,7 @@ async fn get_by_name(req: HttpRequest, path: web::Path<String>) -> ActixResponse
 
 async fn post_phonebook_handler(req: HttpRequest, person: web::Json<Person>) -> ActixResponse {
     log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
-    println!("POST {person:?}");
+    log::info!("POST {person:?}");
     let person = person.into_inner();
     // SAFETY: APP_JSON_FILE is properly initialized else the app will panic at start
     let mutex = Arc::clone(&APP_JSON_FILE);
@@ -162,12 +166,14 @@ async fn get_phonebook_handler(req: HttpRequest) -> ActixResponse {
 }
 
 async fn delete_id(req: HttpRequest, id: web::Path<u32>) -> ActixResponse {
-    println!("{} {:?} {}", req.method(), req.version(), req.uri());
+    log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
     let id = id.into_inner() as ::phonebook::PersonID;
     let json_file = Arc::clone(&APP_JSON_FILE);
     // Infallible
     json_file.write().delete(id).expect("Infallible");
-    async_write_json(&PHONEBOOK_PATH, json_file.clone()).await.actix_result()?;
+    async_write_json(&PHONEBOOK_PATH, json_file)
+        .await
+        .actix_result()?;
 
     Ok(HttpResponse::NoContent().finish())
 }

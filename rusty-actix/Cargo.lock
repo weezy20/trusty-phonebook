@@ -197,6 +197,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "actixbook"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "anyhow",
+ "env_logger",
+ "fs2",
+ "lazy_static",
+ "log",
+ "memmap2",
+ "parking_lot",
+ "rand",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "adler"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -878,26 +898,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
  "semver",
-]
-
-[[package]]
-name = "rusty-actix"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-web",
- "anyhow",
- "env_logger",
- "fs2",
- "lazy_static",
- "log",
- "memmap2",
- "parking_lot",
- "rand",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
 ]
 
 [[package]]

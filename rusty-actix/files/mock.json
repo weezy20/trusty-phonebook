@@ -21,24 +21,9 @@
       "number": "890123890"
     },
     {
-      "id": 12,
-      "name": "Rusty Lane",
-      "number": "12222"
-    },
-    {
-      "id": 19,
-      "name": "Pizza",
-      "number": "231231231434545656756756789687"
-    },
-    {
       "id": 20,
       "name": "Marry Popendick",
       "number": "121-990088233"
-    },
-    {
-      "id": 21,
-      "name": "Mara Bos",
-      "number": "Rust Atomics"
     },
     {
       "id": 22,
@@ -49,6 +34,21 @@
       "id": 23,
       "name": "Forensics Department",
       "number": "991"
+    },
+    {
+      "id": 24,
+      "name": "Max Life Insurance",
+      "number": "123-123"
+    },
+    {
+      "id": 25,
+      "name": "Kritika Shah",
+      "number": "192923"
+    },
+    {
+      "id": 26,
+      "name": "Sonal Lovelace",
+      "number": "123"
     }
   ]
 }
