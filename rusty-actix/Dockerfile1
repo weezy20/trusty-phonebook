@@ -1,0 +1,8 @@
+# Results in a 2.17 GB file lmao
+FROM rust:1.61
+WORKDIR /actixbook
+COPY ./ ./
+RUN cargo install --path . 
+
+# set the startup command to run your binary
+CMD ["actixbook"]
