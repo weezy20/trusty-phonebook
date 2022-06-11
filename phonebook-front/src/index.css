@@ -1,0 +1,15 @@
+body {
+    color: blue;
+}
+h1 {
+    font-size: 300%;
+    font-style: italic;
+    color: gray;
+}
+li {
+    font-style: italic;
+    font-weight: 800;
+    color: black;
+    padding-top: 3px;
+    font-size: 15px;
+  }

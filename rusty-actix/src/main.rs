@@ -4,6 +4,7 @@
 //! We take the dynamic json reader approach first i.e. no struct defining a schema, just Json JsonValue
 // use serde_json::Value as JsonValue;
 
+use actix_files::NamedFile;
 use ::phonebook::{read_json, JsonFile, Person};
 use actix_cors::Cors;
 use actix_web::Result as ActixResult;
@@ -19,6 +20,7 @@ use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::net::TcpListener;
 use std::sync::{Arc, Once};
+use actix_web_static_files::ResourceFiles;
 // https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
 // Cannot call non-const fns in static/const context
 lazy_static! {
@@ -31,21 +33,24 @@ lazy_static! {
         .expect("Invalid Port number");
 }
 static APP_INIT: Once = Once::new();
-
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 pub(crate) type ActixResponse = ActixResult<HttpResponse>;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     init();
     env_logger::init();
-    println!("Started on port {}", *PORT);
+    std::env::set_var("RUST_LOG", "actix_web=info");
+    std::env::set_var("REACT_APP_SERVER_PORT", (PORT).to_string());
     let tcp = TcpListener::bind(&format!("0.0.0.0:{}", *PORT))?;
     let _port = tcp.local_addr()?.port();
+    println!("Started on port {}", *PORT);
     HttpServer::new(move || {
+        let generated = generate();
         App::new()
             // Cors::permissive is not recommended for production environments
             .wrap(Cors::permissive())
             // Get
-            .route("/", web::get().to(index))
+            // .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
             .route("/{name}", web::get().to(get_by_name))
@@ -57,12 +62,20 @@ async fn main() -> std::io::Result<()> {
             // we can use "/book" and perform the checking of ids in rust or we can do better
             // and make a put "/book/id", which let's us surgically update a complete record, be it name or number
             .route("/book/{id}", web::put().to(put_update))
+            // This needs to be placed after routers
+            .service(ResourceFiles::new("/", generated))
         // .route("/book/{name}", web::get().to(get_by_name))
     })
     .listen(tcp)?
     .run()
     .await
 }
+
+
+async fn index(_req: HttpRequest) -> actix_web::Result<NamedFile, std::io::Error> {
+    NamedFile::open("react-front/index.html")
+}
+
 
 async fn put_update(path: web::Path<u32>, person: web::Json<Person>, req: HttpRequest) -> ActixResponse {
     log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
@@ -171,15 +184,9 @@ async fn delete_id(req: HttpRequest, id: web::Path<u32>) -> ActixResponse {
     let json_file = Arc::clone(&APP_JSON_FILE);
     // Infallible
     json_file.write().delete(id).expect("Infallible");
-    async_write_json(&PHONEBOOK_PATH, json_file)
-        .await
-        .actix_result()?;
+    async_write_json(&PHONEBOOK_PATH, json_file).await.actix_result()?;
 
     Ok(HttpResponse::NoContent().finish())
-}
-
-async fn index(_req: HttpRequest) -> HttpResponse {
-    HttpResponse::Ok().body("<h1>Rusty phonebook backend</h1>")
 }
 
 fn init() {

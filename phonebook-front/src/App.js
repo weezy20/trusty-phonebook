@@ -2,7 +2,9 @@ import React from "react";
 // import ReactDOM from 'react-dom'
 import { useEffect, useState } from "react";
 import axios from "axios";
-const base_url = "http://localhost";
+const SERVER_PORT = process.env.REACT_APP_SERVER_PORT ? process.env.REACT_APP_SERVER_PORT : 80;
+const SERVER_HOST = process.env.REACT_APP_SERVER_HOST ? process.env.REACT_APP_SERVER_HOST : "localhost";
+const base_url = `http://${SERVER_HOST}:${SERVER_PORT}`;
 // TODO: Reject duplicate names from being added, this can be done if the server returns an error
 
 export default function App() {
