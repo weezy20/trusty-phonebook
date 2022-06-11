@@ -4,27 +4,27 @@
 //! We take the dynamic json reader approach first i.e. no struct defining a schema, just Json JsonValue
 // use serde_json::Value as JsonValue;
 
-use actix_files::NamedFile;
+#![allow(unused_imports)]
 use ::phonebook::{read_json, JsonFile, Person};
 use actix_cors::Cors;
+use actix_files::NamedFile;
 use actix_web::Result as ActixResult;
 use actix_web::{error as actix_error, web, App, HttpRequest, HttpResponse, HttpServer};
-#[allow(unused)]
 use phonebook::{async_read_json, async_write_json};
 #[macro_use] // https://doc.rust-lang.org/reference/macros-by-example.html#the-macro_use-attribute
 mod macros;
 mod into_actix_trait;
+use actix_web_static_files::ResourceFiles;
 use anyhow::anyhow;
 use into_actix_trait::IntoActixResult;
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::net::TcpListener;
 use std::sync::{Arc, Once};
-use actix_web_static_files::ResourceFiles;
 // https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
 // Cannot call non-const fns in static/const context
 lazy_static! {
-    static ref PHONEBOOK_PATH: &'static std::path::Path = &std::path::Path::new("files/mock.json");
+    static ref PHONEBOOK_PATH: &'static std::path::Path = &std::path::Path::new("files/mock copy.json");
     static ref APP_JSON_FILE: Arc<RwLock<JsonFile>> = Arc::new(RwLock::new(JsonFile::default()));
     // Done : Select PORT from environment or start using port 80
     static ref PORT: u16 = std::env::var("PORT")
@@ -45,12 +45,12 @@ async fn main() -> std::io::Result<()> {
     let _port = tcp.local_addr()?.port();
     println!("Started on port {}", *PORT);
     HttpServer::new(move || {
-        let generated = generate();
+        let _generated = generate();
         App::new()
             // Cors::permissive is not recommended for production environments
             .wrap(Cors::permissive())
             // Get
-            // .route("/", web::get().to(index))
+            .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
             .route("/{name}", web::get().to(get_by_name))
@@ -63,7 +63,14 @@ async fn main() -> std::io::Result<()> {
             // and make a put "/book/id", which let's us surgically update a complete record, be it name or number
             .route("/book/{id}", web::put().to(put_update))
             // This needs to be placed after routers
-            .service(ResourceFiles::new("/", generated))
+            // .service(ResourceFiles::new("/", _generated))
+            .service(
+                actix_web_lab::web::spa()
+                    .index_file("./react-front/index.html")
+                    .static_resources_mount("/static")
+                    .static_resources_location("./react-front/static")
+                    .finish(),
+            )
         // .route("/book/{name}", web::get().to(get_by_name))
     })
     .listen(tcp)?
@@ -71,11 +78,9 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-
 async fn index(_req: HttpRequest) -> actix_web::Result<NamedFile, std::io::Error> {
     NamedFile::open("react-front/index.html")
 }
-
 
 async fn put_update(path: web::Path<u32>, person: web::Json<Person>, req: HttpRequest) -> ActixResponse {
     log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
