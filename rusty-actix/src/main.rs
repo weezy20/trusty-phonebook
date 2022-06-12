@@ -4,10 +4,10 @@
 //! We take the dynamic json reader approach first i.e. no struct defining a schema, just Json JsonValue
 // Branch Actix_Files: Where we try to achieve the same results as master branch but using actix_files
 #![allow(unused_imports)]
-use actix_files::NamedFile;
-use actix_files as afs;
 use ::phonebook::{read_json, JsonFile, Person};
 use actix_cors::Cors;
+use actix_files as afs;
+use actix_files::NamedFile;
 use actix_web::Result as ActixResult;
 use actix_web::{error as actix_error, web, App, HttpRequest, HttpResponse, HttpServer};
 #[allow(unused)]
@@ -48,7 +48,7 @@ async fn main() -> std::io::Result<()> {
             // Cors::permissive is not recommended for production environments
             .wrap(Cors::permissive())
             // Get
-            // .route("/", web::get().to(index))
+            .route("/", web::get().to(index))
             .route("/book", web::get().to(get_phonebook_handler))
             .route("/book/{id}", web::get().to(get_by_id))
             .route("/{name}", web::get().to(get_by_name))
@@ -61,19 +61,17 @@ async fn main() -> std::io::Result<()> {
             // and make a put "/book/id", which let's us surgically update a complete record, be it name or number
             .route("/book/{id}", web::put().to(put_update))
             // This needs to be placed after routers
-            .service(afs::Files::new("/", "./react-front").index_file("index.html"))
-            // .route("/book/{name}", web::get().to(get_by_name))
-        })
-        .listen(tcp)?
-        .run()
-        .await
-    }
-    
-    
-    // async fn index(_req: HttpRequest) -> actix_web::Result<NamedFile, std::io::Error> {
-        //     NamedFile::open("react-front/index.html")
-// }
+            .service(afs::Files::new("/app", "./react-front").index_file("index.html"))
+        // .route("/book/{name}", web::get().to(get_by_name))
+    })
+    .listen(tcp)?
+    .run()
+    .await
+}
 
+async fn index(_req: HttpRequest) -> actix_web::Result<NamedFile, std::io::Error> {
+    NamedFile::open("react-front/index.html")
+}
 
 async fn put_update(path: web::Path<u32>, person: web::Json<Person>, req: HttpRequest) -> ActixResponse {
     log::info!("{} {:?} {}", req.method(), req.version(), req.uri());
