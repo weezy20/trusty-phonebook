@@ -36,6 +36,7 @@ FROM alpine:latest
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 COPY --from=builder /actixbook/files /actixbook/files
+COPY --from=builder /actixbook/react-front /actixbook/react-front
 WORKDIR /actixbook
 
 # Copy our build
