@@ -2,7 +2,7 @@
 //! A web server that exposes RESTful endpoints
 //! And a file reader writer that can read and manipulate a json file
 //! We take the dynamic json reader approach first i.e. no struct defining a schema, just Json JsonValue
-// use serde_json::Value as JsonValue;
+// Branch Actix_Files: Where we try to achieve the same results as master branch but using actix_files
 
 use actix_files::NamedFile;
 use ::phonebook::{read_json, JsonFile, Person};
@@ -20,7 +20,6 @@ use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::net::TcpListener;
 use std::sync::{Arc, Once};
-use actix_web_static_files::ResourceFiles;
 // https://users.rust-lang.org/t/how-can-i-use-mutable-lazy-static/3751/3
 // Cannot call non-const fns in static/const context
 lazy_static! {
@@ -33,7 +32,6 @@ lazy_static! {
         .expect("Invalid Port number");
 }
 static APP_INIT: Once = Once::new();
-include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 pub(crate) type ActixResponse = ActixResult<HttpResponse>;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -45,7 +43,6 @@ async fn main() -> std::io::Result<()> {
     let _port = tcp.local_addr()?.port();
     println!("Started on port {}", *PORT);
     HttpServer::new(move || {
-        let generated = generate();
         App::new()
             // Cors::permissive is not recommended for production environments
             .wrap(Cors::permissive())
@@ -63,7 +60,6 @@ async fn main() -> std::io::Result<()> {
             // and make a put "/book/id", which let's us surgically update a complete record, be it name or number
             .route("/book/{id}", web::put().to(put_update))
             // This needs to be placed after routers
-            .service(ResourceFiles::new("/", generated))
         // .route("/book/{name}", web::get().to(get_by_name))
     })
     .listen(tcp)?
