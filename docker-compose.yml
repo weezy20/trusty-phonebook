@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+  frontend:
+    container_name: phonebook-react-ui
+    build:
+      context: ./phonebook-front
+      dockerfile: ./Dockerfile
+      target: production
+    ports:
+      - 3000:80
+    networks:
+      - phonebook
+    depends_on:
+      - backend
+
+  backend:
+    container_name: phonebook-actix-rust
+    build:
+      context: ./rusty-actix
+      dockerfile: ./Dockerfile
+      target: production
+    networks:
+      - phonebook
+    ports:
+      - 5000:80
+
+networks:
+  phonebook:
+    driver: bridge
